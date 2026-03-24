@@ -1,0 +1,32 @@
+[project]
+name = "minimax-studio"
+version = "0.1.0"
+description = "MiniMax Studio CLI for clip, planning, voice, music, stitch, and full video workflows."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "argcomplete>=3.6.2",
+  "requests>=2.32.0",
+]
+
+[project.scripts]
+ms = "minimax_studio.cli.main:main"
+ms-clip = "minimax_studio.cli.clip:main"
+ms-make = "minimax_studio.cli.make:main"
+ms-plan = "minimax_studio.cli.plan:main"
+ms-voice = "minimax_studio.cli.voice:main"
+ms-music = "minimax_studio.cli.music:main"
+ms-stitch = "minimax_studio.cli.stitch:main"
+ms-models = "minimax_studio.cli.models:main"
+ms-quota = "minimax_studio.cli.quota:main"
+ms-completion = "minimax_studio.cli.completion:main"
+
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/minimax_studio"]
+
+[tool.uv]
+package = true
