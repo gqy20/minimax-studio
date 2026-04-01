@@ -9,11 +9,15 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 )
 
 const (
-	BaseURL = "https://api.minimax.chat"
+	BaseURL             = "https://api.minimax.chat"
+	OpenPlatformBaseURL = "https://www.minimaxi.com/v1/api/openplatform"
+	AnthropicMessagesURL = "https://api.minimaxi.com/anthropic/v1/messages"
 )
 
 // MiniMaxClient MiniMax API 客户端
@@ -385,6 +389,187 @@ func (c *MiniMaxClient) GetQuota(ctx context.Context) (*QuotaResponse, error) {
 	}
 
 	return &result, nil
+}
+
+// AnthropicResponse Anthropic 兼容接口响应
+type AnthropicResponse struct {
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+	BaseResp struct {
+		StatusCode int    `json:"status_code"`
+		StatusMsg  string `json:"status_msg"`
+	} `json:"base_resp"`
+}
+
+// PlanVideoRequest 分镜规划请求参数
+type PlanVideoRequest struct {
+	Theme         string
+	SceneCount    int
+	SceneDuration int
+	Language      string
+	TextModel     string
+	TextMaxTokens int
+}
+
+// PlanVideoResponse 分镜规划响应
+type PlanVideoResponse struct {
+	Title       string `json:"title"`
+	VisualStyle string `json:"visual_style"`
+	Narration   string `json:"narration"`
+	MusicPrompt string `json:"music_prompt"`
+	Scenes      []struct {
+		Name        string `json:"name"`
+		ImagePrompt string `json:"image_prompt"`
+		VideoPrompt string `json:"video_prompt"`
+	} `json:"scenes"`
+}
+
+// PlanVideo 调用 MiniMax 文本模型生成分镜规划
+func (c *MiniMaxClient) PlanVideo(ctx context.Context, req PlanVideoRequest) (*PlanVideoResponse, error) {
+	systemPrompt := "You are a video creative planner. Return valid JSON only. Do not use markdown fences. Do not include explanations. Provide concise, production-ready prompts."
+
+	maxChars := max(18, req.SceneCount*req.SceneDuration*5)
+
+	userPrompt := fmt.Sprintf(`为主题"%s"生成一个短视频制作方案。
+
+要求：
+1. 输出 JSON 对象，字段必须完整。
+2. scenes 数组长度必须等于 %d。
+3. 每个 scene 的画面提示词和运动提示词用英文，适合 AI 图片/视频生成。
+4. narration 使用 %s，必须简短自然，总长度控制在 %d 个字符以内，适配总时长约 %d 秒。
+5. music_prompt 用英文，描述纯音乐，不要人声。
+6. 风格要统一，适合短视频成片。
+
+JSON Schema:
+{
+  "title": "string",
+  "visual_style": "string",
+  "narration": "string",
+  "music_prompt": "string",
+  "scenes": [
+    {
+      "name": "string",
+      "image_prompt": "string",
+      "video_prompt": "string"
+    }
+  ]
+}`, req.Theme, req.SceneCount, req.Language, maxChars, req.SceneCount*req.SceneDuration)
+
+	payload := map[string]interface{}{
+		"model":      req.TextModel,
+		"max_tokens": req.TextMaxTokens,
+		"system":     systemPrompt,
+		"messages": []map[string]interface{}{
+			{
+				"role": "user",
+				"content": []map[string]string{
+					{"type": "text", "text": userPrompt},
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", AnthropicMessagesURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", c.APIKey)
+	httpReq.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := c.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var anthropicResp AnthropicResponse
+	if err := json.NewDecoder(resp.Body).Decode(&anthropicResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if anthropicResp.BaseResp.StatusCode != 0 {
+		return nil, fmt.Errorf("anthropic_messages failed: %d %s", anthropicResp.BaseResp.StatusCode, anthropicResp.BaseResp.StatusMsg)
+	}
+
+	// 提取文本内容
+	var textParts []string
+	for _, block := range anthropicResp.Content {
+		if block.Type == "text" && block.Text != "" {
+			textParts = append(textParts, block.Text)
+		}
+	}
+
+	if len(textParts) == 0 {
+		return nil, fmt.Errorf("anthropic_messages returned no text content")
+	}
+
+	content := joinNonEmpty(textParts)
+
+	// 解析 JSON
+	return parsePlanJSON(content, req.SceneCount)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func joinNonEmpty(parts []string) string {
+	var result string
+	for i, p := range parts {
+		if p != "" {
+			if i > 0 {
+				result += "\n"
+			}
+			result += p
+		}
+	}
+	return result
+}
+
+func parsePlanJSON(text string, expectedSceneCount int) (*PlanVideoResponse, error) {
+	// 移除 thinking 标签
+	re := regexp.MustCompile(`<thinking>.*?</thinking>`)
+	text = re.ReplaceAllString(text, "")
+
+	// 移除 markdown code fences
+	text = strings.TrimSpace(text)
+	re2 := regexp.MustCompile("(?s)^```[a-zA-Z0-9_-]*\n?(.*?)\n?```$")
+	if matches := re2.FindStringSubmatch(text); len(matches) > 1 {
+		text = matches[1]
+	}
+
+	// 尝试直接解析
+	var plan PlanVideoResponse
+	if err := json.Unmarshal([]byte(text), &plan); err != nil {
+		// 尝试提取 JSON 对象
+		re3 := regexp.MustCompile(`(?s)\{.*\}`)
+		match := re3.FindString(text)
+		if match == "" {
+			return nil, fmt.Errorf("failed to locate JSON object in response")
+		}
+		if err := json.Unmarshal([]byte(match), &plan); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON: %w", err)
+		}
+	}
+
+	// 验证场景数量
+	if expectedSceneCount > 0 && len(plan.Scenes) != expectedSceneCount {
+		return nil, fmt.Errorf("plan returned %d scenes, expected %d", len(plan.Scenes), expectedSceneCount)
+	}
+
+	return &plan, nil
 }
 
 func (c *MiniMaxClient) setHeaders(req *http.Request) {
