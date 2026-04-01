@@ -27,7 +27,7 @@ func init() {
 func runQuota(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	cli := client.NewClient(getAPIKey(), getGroupID())
+	cli := client.NewClient(getAPIKey())
 
 	result, err := cli.GetQuota(ctx)
 	if err != nil {
@@ -41,12 +41,9 @@ func runQuota(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("=== Quota Information ===")
-	for _, info := range result.Data.ModelInfos {
-		fmt.Printf("\nModel: %s\n", info.ModelName)
-		fmt.Printf("  Current Interval: %d / %d\n", info.CurrentIntervalUsageCount, info.CurrentIntervalTotalCount)
-		fmt.Printf("  Remains Time: %d ms\n", info.RemainsTime)
-		fmt.Printf("  Weekly: %d / %d\n", info.CurrentWeeklyUsageCount, info.CurrentWeeklyTotalCount)
-		fmt.Printf("  Weekly Remains: %d ms\n", info.WeeklyRemainsTime)
+	for _, entry := range result {
+		jsonOutput, _ := json.MarshalIndent(entry, "  ", "  ")
+		fmt.Printf("  %s\n", string(jsonOutput))
 	}
 
 	return nil

@@ -28,9 +28,8 @@ func init() {
 
 func runServer(cmd *cobra.Command, args []string) error {
 	apiKey := getAPIKey()
-	groupID := getGroupID()
 
-	s := api.NewServer(serverOutputDir, apiKey, groupID)
+	s := api.NewServer(serverOutputDir, apiKey)
 	addr := ":" + serverPort
 	log.Printf("Starting API server on %s", addr)
 	return s.Run(addr)

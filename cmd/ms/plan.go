@@ -53,7 +53,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--output is required")
 	}
 
-	cli := client.NewClient(getAPIKey(), getGroupID())
+	cli := client.NewClient(getAPIKey())
 
 	opts := schemas.PlanOptions{
 		Theme:         planTheme,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,29 +15,34 @@ import (
 	"time"
 )
 
-const (
-	BaseURL             = "https://api.minimax.chat"
-	OpenPlatformBaseURL = "https://www.minimaxi.com/v1/api/openplatform"
+var (
+	APIBase              = "https://api.minimaxi.com/v1"
+	OpenPlatformBase     = "https://www.minimaxi.com/v1/api/openplatform"
 	AnthropicMessagesURL = "https://api.minimaxi.com/anthropic/v1/messages"
+)
+
+const (
+	DefaultImageModel = "image-01"
+	DefaultVideoModel = "MiniMax-Hailuo-2.3-Fast"
+	DefaultTTSModel   = "speech-2.8-hd"
+	DefaultMusicModel = "music-2.5"
+	DefaultTextModel  = "MiniMax-M2.7-highspeed"
+	DefaultVoiceID    = "male-qn-qingse"
 )
 
 // MiniMaxClient MiniMax API 客户端
 type MiniMaxClient struct {
 	APIKey     string
-	GroupID    string
 	HTTPClient *http.Client
-	BaseURL    string
 }
 
 // NewClient 创建新的客户端
-func NewClient(apiKey, groupID string) *MiniMaxClient {
+func NewClient(apiKey string) *MiniMaxClient {
 	return &MiniMaxClient{
-		APIKey:  apiKey,
-		GroupID: groupID,
+		APIKey: apiKey,
 		HTTPClient: &http.Client{
 			Timeout: 600 * time.Second,
 		},
-		BaseURL: BaseURL,
 	}
 }
 
@@ -45,157 +51,199 @@ func GetAPIKey() string {
 	return os.Getenv("MINIMAX_API_KEY")
 }
 
-// GetGroupID 从环境变量获取 Group ID
-func GetGroupID() string {
-	return os.Getenv("MINIMAX_GROUP_ID")
+// --- 通用请求方法 ---
+
+func (c *MiniMaxClient) requestJSON(ctx context.Context, method, path, label string, params, payload map[string]interface{}) (map[string]interface{}, error) {
+	url := APIBase + path
+
+	var bodyReader io.Reader
+	if payload != nil {
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed to marshal request: %w", label, err)
+		}
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to create request: %w", label, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+
+	if params != nil {
+		q := req.URL.Query()
+		for k, v := range params {
+			q.Set(k, fmt.Sprintf("%v", v))
+		}
+		req.URL.RawQuery = q.Encode()
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%s: request failed: %w", label, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to read response: %w", label, err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("%s: HTTP %d: %s", label, resp.StatusCode, string(respBody))
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(respBody, &data); err != nil {
+		return nil, fmt.Errorf("%s: failed to decode JSON: %w", label, err)
+	}
+
+	// 检查 base_resp
+	baseResp, _ := data["base_resp"].(map[string]interface{})
+	statusCode, _ := baseResp["status_code"].(float64)
+	if int(statusCode) != 0 {
+		statusMsg, _ := baseResp["status_msg"].(string)
+		return nil, fmt.Errorf("%s failed: %d %s", label, int(statusCode), statusMsg)
+	}
+
+	return data, nil
 }
 
-// ImageResponse 图片生成响应
-type ImageResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		ImageBase64 string `json:"image_base64"`
-		ImageURL    string `json:"image_url"`
-	} `json:"data"`
+func (c *MiniMaxClient) requestOpenPlatform(ctx context.Context, method, path, label string, params map[string]interface{}) (map[string]interface{}, error) {
+	url := OpenPlatformBase + path
+
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to create request: %w", label, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+
+	if params != nil {
+		q := req.URL.Query()
+		for k, v := range params {
+			q.Set(k, fmt.Sprintf("%v", v))
+		}
+		req.URL.RawQuery = q.Encode()
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%s: request failed: %w", label, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to read response: %w", label, err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("%s: HTTP %d: %s", label, resp.StatusCode, string(respBody))
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(respBody, &data); err != nil {
+		return nil, fmt.Errorf("%s: failed to decode JSON: %w", label, err)
+	}
+
+	baseResp, _ := data["base_resp"].(map[string]interface{})
+	statusCode, _ := baseResp["status_code"].(float64)
+	if int(statusCode) != 0 {
+		statusMsg, _ := baseResp["status_msg"].(string)
+		return nil, fmt.Errorf("%s failed: %d %s", label, int(statusCode), statusMsg)
+	}
+
+	return data, nil
 }
 
-// GenerateImage 生成图片
-func (c *MiniMaxClient) GenerateImage(ctx context.Context, prompt, aspectRatio string, promptOptimizer bool) ([]byte, error) {
-	url := fmt.Sprintf("%s/v1/images/generations", c.BaseURL)
+// --- 图片生成 ---
 
+// GenerateImage 生成图片，返回图片二进制数据
+func (c *MiniMaxClient) GenerateImage(ctx context.Context, prompt, aspectRatio string, promptOptimizer bool) ([]byte, string, error) {
 	payload := map[string]interface{}{
-		"model":            "image-01",
+		"model":            DefaultImageModel,
 		"prompt":           prompt,
 		"aspect_ratio":     aspectRatio,
+		"response_format":  "base64",
 		"prompt_optimizer": promptOptimizer,
 	}
 
-	body, err := json.Marshal(payload)
+	data, err := c.requestJSON(ctx, "POST", "/image_generation", "image_generation", nil, payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	// 响应: data.image_base64 (string)
+	dataField, _ := data["data"].(map[string]interface{})
+	imageBase64, _ := dataField["image_base64"].(string)
+	if imageBase64 == "" {
+		return nil, "", fmt.Errorf("image_generation returned no image_base64: %v", data)
+	}
+
+	imageBytes, err := base64.StdEncoding.DecodeString(imageBase64)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, imageBase64, fmt.Errorf("failed to decode base64 image: %w", err)
 	}
 
-	c.setHeaders(req)
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := c.checkError(resp); err != nil {
-		return nil, err
-	}
-
-	var result ImageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return base64.StdEncoding.DecodeString(result.Data.ImageBase64)
+	return imageBytes, imageBase64, nil
 }
 
-// VideoTaskResponse 视频任务响应
-type VideoTaskResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		TaskID string `json:"task_id"`
-	} `json:"data"`
-}
+// --- 视频生成 ---
 
 // CreateVideoTask 创建视频生成任务
 func (c *MiniMaxClient) CreateVideoTask(ctx context.Context, imageBase64, prompt, model string, duration int, resolution string) (string, error) {
-	url := fmt.Sprintf("%s/v1/video_generations", c.BaseURL)
-
 	payload := map[string]interface{}{
-		"model": model,
-		"input": map[string]interface{}{
-			"image_base64": imageBase64,
-			"prompt":       prompt,
-		},
-		"config": map[string]interface{}{
-			"duration":   duration,
-			"resolution": resolution,
-		},
+		"model":             model,
+		"prompt":            prompt,
+		"first_frame_image": "data:image/jpeg;base64," + imageBase64,
+		"duration":          duration,
+		"resolution":        resolution,
 	}
 
-	body, err := json.Marshal(payload)
+	data, err := c.requestJSON(ctx, "POST", "/video_generation", "video_generation", nil, payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	c.setHeaders(req)
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := c.checkError(resp); err != nil {
 		return "", err
 	}
 
-	var result VideoTaskResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	// 响应: task_id (顶层字段)
+	taskID, _ := data["task_id"].(string)
+	if taskID == "" {
+		return "", fmt.Errorf("video_generation returned no task_id: %v", data)
 	}
 
-	return result.Data.TaskID, nil
-}
-
-// VideoStatusResponse 视频任务状态响应
-type VideoStatusResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		Status      string `json:"status"`
-		FileID      string `json:"file_id"`
-		DownloadURL string `json:"download_url"`
-	} `json:"data"`
+	return taskID, nil
 }
 
 // PollVideoTask 轮询视频任务状态
 func (c *MiniMaxClient) PollVideoTask(ctx context.Context, taskID string, intervalSeconds, maxWaitSeconds int, onStatus func(string)) (string, error) {
-	url := fmt.Sprintf("%s/v1/video_generations/%s", c.BaseURL, taskID)
-
 	deadline := time.Now().Add(time.Duration(maxWaitSeconds) * time.Second)
 
 	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		data, err := c.requestJSON(ctx, "GET", "/query/video_generation", "query_video_generation",
+			map[string]interface{}{"task_id": taskID}, nil)
 		if err != nil {
-			return "", fmt.Errorf("failed to create request: %w", err)
+			return "", err
 		}
 
-		c.setHeaders(req)
-		resp, err := c.HTTPClient.Do(req)
-		if err != nil {
-			return "", fmt.Errorf("failed to send request: %w", err)
-		}
-
-		var result VideoStatusResponse
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			resp.Body.Close()
-			return "", fmt.Errorf("failed to decode response: %w", err)
-		}
-		resp.Body.Close()
-
+		status, _ := data["status"].(string)
 		if onStatus != nil {
-			onStatus(result.Data.Status)
+			onStatus(fmt.Sprintf("video task %s status: %s", taskID, status))
 		}
 
-		switch result.Data.Status {
-		case "success":
-			return result.Data.FileID, nil
-		case "failed":
-			return "", fmt.Errorf("video generation failed")
+		switch status {
+		case "Success":
+			fileID, _ := data["file_id"].(string)
+			if fileID == "" {
+				return "", fmt.Errorf("video task succeeded without file_id: %v", data)
+			}
+			return fileID, nil
+		case "Fail", "Failed", "Expired":
+			return "", fmt.Errorf("video task ended with status=%s: %v", status, data)
 		}
 
 		select {
@@ -205,213 +253,148 @@ func (c *MiniMaxClient) PollVideoTask(ctx context.Context, taskID string, interv
 		}
 	}
 
-	return "", fmt.Errorf("timeout waiting for video generation")
+	return "", fmt.Errorf("video task %s timed out after %d seconds", taskID, maxWaitSeconds)
 }
 
-// DownloadURLResponse 下载 URL 响应
-type DownloadURLResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		URL string `json:"url"`
-	} `json:"data"`
-}
-
-// FetchDownloadURL 获取下载 URL
+// FetchDownloadURL 获取文件下载 URL
 func (c *MiniMaxClient) FetchDownloadURL(ctx context.Context, fileID string) (string, error) {
-	url := fmt.Sprintf("%s/v1/files/%s/download", c.BaseURL, fileID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	data, err := c.requestJSON(ctx, "GET", "/files/retrieve", "files_retrieve",
+		map[string]interface{}{"file_id": fileID}, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	c.setHeaders(req)
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := c.checkError(resp); err != nil {
 		return "", err
 	}
 
-	var result DownloadURLResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	fileObj, _ := data["file"].(map[string]interface{})
+	downloadURL, _ := fileObj["download_url"].(string)
+	if downloadURL == "" {
+		return "", fmt.Errorf("files_retrieve returned no download_url: %v", data)
 	}
 
-	return result.Data.URL, nil
+	return downloadURL, nil
 }
 
 // DownloadFile 下载文件
 func (c *MiniMaxClient) DownloadFile(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create download request: %w", err)
 	}
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to download: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 
 	return io.ReadAll(resp.Body)
 }
 
-// SynthesizeSpeech 语音合成
-func (c *MiniMaxClient) SynthesizeSpeech(ctx context.Context, text, voiceID, model, audioFormat string) ([]byte, error) {
-	url := fmt.Sprintf("%s/v1/t2a_v2", c.BaseURL)
+// --- 语音合成 ---
 
+// SynthesizeSpeech 语音合成，返回音频二进制数据
+func (c *MiniMaxClient) SynthesizeSpeech(ctx context.Context, text, voiceID, ttsModel, audioFormat string) ([]byte, error) {
 	payload := map[string]interface{}{
-		"model":        model,
-		"text":         text,
-		"voice_id":     voiceID,
-		"audio_format": audioFormat,
+		"model": ttsModel,
+		"text":  text,
+		"stream": false,
+		"voice_setting": map[string]interface{}{
+			"voice_id": voiceID,
+			"speed":    1,
+			"vol":      1,
+			"pitch":    0,
+		},
+		"language_boost": "Chinese",
+		"audio_setting": map[string]interface{}{
+			"sample_rate": 32000,
+			"bitrate":     128000,
+			"format":      audioFormat,
+			"channel":     1,
+		},
+		"subtitle_enable": false,
 	}
 
-	body, err := json.Marshal(payload)
+	data, err := c.requestJSON(ctx, "POST", "/t2a_v2", "t2a_v2", nil, payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	c.setHeaders(req)
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := c.checkError(resp); err != nil {
 		return nil, err
 	}
 
-	return io.ReadAll(resp.Body)
+	// 响应: data.audio (hex string)
+	dataField, _ := data["data"].(map[string]interface{})
+	audioHex, _ := dataField["audio"].(string)
+	if audioHex == "" {
+		return nil, fmt.Errorf("t2a_v2 returned no audio: %v", data)
+	}
+
+	audioBytes, err := hex.DecodeString(audioHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode hex audio: %w", err)
+	}
+
+	return audioBytes, nil
 }
 
-// GenerateMusic 生成音乐
-func (c *MiniMaxClient) GenerateMusic(ctx context.Context, prompt, model, audioFormat string) (string, error) {
-	url := fmt.Sprintf("%s/v1/music_generations", c.BaseURL)
+// --- 音乐生成 ---
 
+// GenerateMusic 生成音乐，返回音频二进制数据
+func (c *MiniMaxClient) GenerateMusic(ctx context.Context, prompt, musicModel, audioFormat string) ([]byte, error) {
 	payload := map[string]interface{}{
-		"model":        model,
-		"prompt":       prompt,
-		"audio_format": audioFormat,
+		"model":         musicModel,
+		"prompt":        prompt,
+		"stream":        false,
+		"output_format": "hex",
+		"aigc_watermark": false,
+		"audio_setting": map[string]interface{}{
+			"sample_rate": 44100,
+			"bitrate":     256000,
+			"format":      audioFormat,
+		},
 	}
 
-	body, err := json.Marshal(payload)
+	if musicModel == "music-2.5" {
+		payload["lyrics"] = "[Inst]"
+		payload["lyrics_optimizer"] = false
+	} else {
+		payload["is_instrumental"] = true
+	}
+
+	data, err := c.requestJSON(ctx, "POST", "/music_generation", "music_generation", nil, payload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	// 响应: data.audio (hex string)
+	dataField, _ := data["data"].(map[string]interface{})
+	audioHex, _ := dataField["audio"].(string)
+	if audioHex == "" {
+		return nil, fmt.Errorf("music_generation returned no audio: %v", data)
+	}
+
+	audioBytes, err := hex.DecodeString(audioHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to decode hex audio: %w", err)
 	}
 
-	c.setHeaders(req)
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := c.checkError(resp); err != nil {
-		return "", err
-	}
-
-	var result struct {
-		Success bool `json:"success"`
-		Data    struct {
-			TaskID string `json:"task_id"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return result.Data.TaskID, nil
+	return audioBytes, nil
 }
 
-// QuotaResponse 额度查询响应
-type QuotaResponse struct {
-	Success bool `json:"success"`
-	Data    struct {
-		ModelInfos []struct {
-			ModelName                 string `json:"model_name"`
-			StartTime                 int64  `json:"start_time"`
-			EndTime                   int64  `json:"end_time"`
-			RemainsTime               int64  `json:"remains_time"`
-			CurrentIntervalTotalCount int    `json:"current_interval_total_count"`
-			CurrentIntervalUsageCount int    `json:"current_interval_usage_count"`
-			WeeklyStartTime           int64  `json:"weekly_start_time"`
-			WeeklyEndTime             int64  `json:"weekly_end_time"`
-			CurrentWeeklyTotalCount   int    `json:"current_weekly_total_count"`
-			CurrentWeeklyUsageCount   int    `json:"current_weekly_usage_count"`
-			WeeklyRemainsTime         int64  `json:"weekly_remains_time"`
-		} `json:"model_infos"`
-	} `json:"data"`
-}
+// --- 额度查询 ---
 
 // GetQuota 查询额度
-func (c *MiniMaxClient) GetQuota(ctx context.Context) (*QuotaResponse, error) {
-	url := fmt.Sprintf("%s/v1/coding_plan/remains", c.BaseURL)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (c *MiniMaxClient) GetQuota(ctx context.Context) ([]interface{}, error) {
+	data, err := c.requestOpenPlatform(ctx, "GET", "/coding_plan/remains", "coding_plan_remains", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	c.setHeaders(req)
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := c.checkError(resp); err != nil {
 		return nil, err
 	}
 
-	var result QuotaResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
+	modelRemains, _ := data["model_remains"].([]interface{})
+	return modelRemains, nil
 }
 
-// AnthropicResponse Anthropic 兼容接口响应
-type AnthropicResponse struct {
-	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	BaseResp struct {
-		StatusCode int    `json:"status_code"`
-		StatusMsg  string `json:"status_msg"`
-	} `json:"base_resp"`
-}
-
-// PlanVideoRequest 分镜规划请求参数
-type PlanVideoRequest struct {
-	Theme         string
-	SceneCount    int
-	SceneDuration int
-	Language      string
-	TextModel     string
-	TextMaxTokens int
-}
+// --- 分镜规划（Anthropic 兼容接口） ---
 
 // PlanVideoResponse 分镜规划响应
 type PlanVideoResponse struct {
@@ -426,11 +409,21 @@ type PlanVideoResponse struct {
 	} `json:"scenes"`
 }
 
+// PlanVideoRequest 分镜规划请求参数
+type PlanVideoRequest struct {
+	Theme         string
+	SceneCount    int
+	SceneDuration int
+	Language      string
+	TextModel     string
+	TextMaxTokens int
+}
+
 // PlanVideo 调用 MiniMax 文本模型生成分镜规划
 func (c *MiniMaxClient) PlanVideo(ctx context.Context, req PlanVideoRequest) (*PlanVideoResponse, error) {
 	systemPrompt := "You are a video creative planner. Return valid JSON only. Do not use markdown fences. Do not include explanations. Provide concise, production-ready prompts."
 
-	maxChars := max(18, req.SceneCount*req.SceneDuration*5)
+	maxChars := maxInt(18, req.SceneCount*req.SceneDuration*5)
 
 	userPrompt := fmt.Sprintf(`为主题"%s"生成一个短视频制作方案。
 
@@ -473,12 +466,12 @@ JSON Schema:
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("plan: failed to marshal request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", AnthropicMessagesURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("plan: failed to create request: %w", err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -487,67 +480,66 @@ JSON Schema:
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("plan: request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var anthropicResp AnthropicResponse
-	if err := json.NewDecoder(resp.Body).Decode(&anthropicResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("plan: failed to read response: %w", err)
 	}
 
-	if anthropicResp.BaseResp.StatusCode != 0 {
-		return nil, fmt.Errorf("anthropic_messages failed: %d %s", anthropicResp.BaseResp.StatusCode, anthropicResp.BaseResp.StatusMsg)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("plan: HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// 检查 base_resp
+	var rawResp map[string]interface{}
+	if err := json.Unmarshal(respBody, &rawResp); err != nil {
+		return nil, fmt.Errorf("plan: failed to decode response: %w", err)
+	}
+
+	baseResp, _ := rawResp["base_resp"].(map[string]interface{})
+	statusCode, _ := baseResp["status_code"].(float64)
+	if int(statusCode) != 0 {
+		statusMsg, _ := baseResp["status_msg"].(string)
+		return nil, fmt.Errorf("plan failed: %d %s", int(statusCode), statusMsg)
 	}
 
 	// 提取文本内容
+	contentBlocks, _ := rawResp["content"].([]interface{})
 	var textParts []string
-	for _, block := range anthropicResp.Content {
-		if block.Type == "text" && block.Text != "" {
-			textParts = append(textParts, block.Text)
+	for _, block := range contentBlocks {
+		b, _ := block.(map[string]interface{})
+		if b["type"] == "text" {
+			if text, ok := b["text"].(string); ok && text != "" {
+				textParts = append(textParts, text)
+			}
 		}
 	}
 
 	if len(textParts) == 0 {
-		return nil, fmt.Errorf("anthropic_messages returned no text content")
+		return nil, fmt.Errorf("plan: anthropic_messages returned no text content: %s", string(respBody))
 	}
 
-	content := joinNonEmpty(textParts)
-
-	// 解析 JSON
+	content := strings.Join(textParts, "\n")
 	return parsePlanJSON(content, req.SceneCount)
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func joinNonEmpty(parts []string) string {
-	var result string
-	for i, p := range parts {
-		if p != "" {
-			if i > 0 {
-				result += "\n"
-			}
-			result += p
-		}
-	}
-	return result
-}
+// --- JSON 解析辅助 ---
 
 func parsePlanJSON(text string, expectedSceneCount int) (*PlanVideoResponse, error) {
 	// 移除 thinking 标签
-	re := regexp.MustCompile(`<thinking>.*?</thinking>`)
+	re := regexp.MustCompile(`(?s)<thinking>.*?</thinking>`)
 	text = re.ReplaceAllString(text, "")
+	text = strings.TrimSpace(text)
 
 	// 移除 markdown code fences
-	text = strings.TrimSpace(text)
-	re2 := regexp.MustCompile("(?s)^```[a-zA-Z0-9_-]*\n?(.*?)\n?```$")
-	if matches := re2.FindStringSubmatch(text); len(matches) > 1 {
-		text = matches[1]
+	if strings.HasPrefix(text, "```") {
+		re2 := regexp.MustCompile("(?s)^```[a-zA-Z0-9_-]*\n?(.*?)\n?```$")
+		if matches := re2.FindStringSubmatch(text); len(matches) > 1 {
+			text = matches[1]
+		}
 	}
 
 	// 尝试直接解析
@@ -557,14 +549,13 @@ func parsePlanJSON(text string, expectedSceneCount int) (*PlanVideoResponse, err
 		re3 := regexp.MustCompile(`(?s)\{.*\}`)
 		match := re3.FindString(text)
 		if match == "" {
-			return nil, fmt.Errorf("failed to locate JSON object in response")
+			return nil, fmt.Errorf("failed to locate JSON object in response: %s", truncate(text, 200))
 		}
 		if err := json.Unmarshal([]byte(match), &plan); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 	}
 
-	// 验证场景数量
 	if expectedSceneCount > 0 && len(plan.Scenes) != expectedSceneCount {
 		return nil, fmt.Errorf("plan returned %d scenes, expected %d", len(plan.Scenes), expectedSceneCount)
 	}
@@ -572,18 +563,16 @@ func parsePlanJSON(text string, expectedSceneCount int) (*PlanVideoResponse, err
 	return &plan, nil
 }
 
-func (c *MiniMaxClient) setHeaders(req *http.Request) {
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
-	if c.GroupID != "" {
-		req.Header.Set("GroupId", c.GroupID)
+func maxInt(a, b int) int {
+	if a > b {
+		return a
 	}
+	return b
 }
 
-func (c *MiniMaxClient) checkError(resp *http.Response) error {
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(body))
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
 	}
-	return nil
+	return s[:n] + "..."
 }

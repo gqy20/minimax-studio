@@ -2,7 +2,6 @@ package workflows
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -139,7 +138,7 @@ func (w *MakeWorkflow) Run(ctx context.Context, opts MakeOptions, reporter Repor
 
 			// 生成关键帧
 			reporter(fmt.Sprintf("step 2/7: generating image for scene %d...", idx))
-			imageData, err := w.client.GenerateImage(ctx, scene.ImagePrompt, opts.AspectRatio, opts.ImagePromptOptimizer)
+			imageData, imageBase64, err := w.client.GenerateImage(ctx, scene.ImagePrompt, opts.AspectRatio, opts.ImagePromptOptimizer)
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate image for scene %d: %w", idx, err)
 			}
@@ -152,7 +151,7 @@ func (w *MakeWorkflow) Run(ctx context.Context, opts MakeOptions, reporter Repor
 			reporter(fmt.Sprintf("step 3/7: generating video for scene %d...", idx))
 			taskID, err := w.client.CreateVideoTask(
 				ctx,
-				base64.StdEncoding.EncodeToString(imageData),
+				imageBase64,
 				scene.VideoPrompt,
 				opts.VideoModel,
 				opts.SceneDuration,

@@ -49,7 +49,7 @@ func runVoice(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--output is required")
 	}
 
-	cli := client.NewClient(getAPIKey(), getGroupID())
+	cli := client.NewClient(getAPIKey())
 
 	opts := schemas.VoiceOptions{
 		Text:        voiceText,

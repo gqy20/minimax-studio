@@ -2,7 +2,6 @@ package workflows
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,7 +34,7 @@ func (w *ClipWorkflow) Run(ctx context.Context, opts schemas.ClipOptions, report
 
 	// Step 1: 生成图片
 	reporter("step 1/4: generating image...")
-	imageData, err := w.client.GenerateImage(
+	imageData, imageBase64, err := w.client.GenerateImage(
 		ctx,
 		opts.ImagePrompt,
 		opts.AspectRatio,
@@ -52,7 +51,6 @@ func (w *ClipWorkflow) Run(ctx context.Context, opts schemas.ClipOptions, report
 
 	// Step 2: 创建视频任务
 	reporter("step 2/4: creating video task...")
-	imageBase64 := base64.StdEncoding.EncodeToString(imageData)
 	taskID, err := w.client.CreateVideoTask(
 		ctx,
 		imageBase64,

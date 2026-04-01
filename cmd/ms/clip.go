@@ -60,7 +60,7 @@ func runClip(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output dir: %w", err)
 	}
 
-	cli := client.NewClient(getAPIKey(), getGroupID())
+	cli := client.NewClient(getAPIKey())
 
 	opts := schemas.ClipOptions{
 		ImagePrompt:   clipPrompt,

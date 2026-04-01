@@ -25,7 +25,7 @@ type Server struct {
 }
 
 // NewServer 创建新的 Server
-func NewServer(outputDir, apiKey, groupID string) *Server {
+func NewServer(outputDir, apiKey string) *Server {
 	if outputDir == "" {
 		outputDir = "./output"
 	}
@@ -40,7 +40,7 @@ func NewServer(outputDir, apiKey, groupID string) *Server {
 		engine:    engine,
 		jobs:      make(map[string]*schemas.Job),
 		outputDir: outputDir,
-		client:    client.NewClient(apiKey, groupID),
+		client:    client.NewClient(apiKey),
 	}
 
 	s.setupRoutes()
