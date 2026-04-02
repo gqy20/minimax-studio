@@ -1,0 +1,23 @@
+{
+  "title": "雾中灯塔",
+  "visual_style": "水墨淡彩电影感，低饱和度青灰色调，东方意境，薄雾氛围",
+  "narration": "清晨的薄雾笼罩着旧码头，一只纸船缓缓驶出，驶向远方灯塔的微光。",
+  "music_prompt": "Ambient piano with soft reverb, gentle waves, distant wind chimes, minimal and meditative, lo-fi acoustic atmosphere",
+  "scenes": [
+    {
+      "name": "码头晨雾",
+      "image_prompt": "Old wooden pier in early morning mist, weathered wood texture, foggy atmosphere, soft diffused light, cinematic composition, Chinese ink painting style, muted teal and grey tones, seagulls in distance",
+      "video_prompt": "Slow pan across misty pier, fog slowly rolling in, subtle light rays breaking through, gentle camera movement, 6 seconds duration, tranquil mood"
+    },
+    {
+      "name": "纸船起航",
+      "image_prompt": "Origami paper boat floating on calm water surface, delicate craftsmanship, morning dew on paper, reflections on water, soft focus background, ethereal lighting, minimalist composition",
+      "video_prompt": "Paper boat gently drifting forward, tiny wake ripples on water, camera slowly tracking the boat, soft bobbing motion, 6 seconds duration, dreamlike movement"
+    },
+    {
+      "name": "灯塔指引",
+      "image_prompt": "Distant lighthouse emerging from morning fog, warm golden light at top, paper boat small in foreground composition, vast misty seascape, emotional scale contrast, cinematic wide shot",
+      "video_prompt": "Paper boat moving toward lighthouse beam of light, lighthouse light slowly rotating, fog dissipating slightly, zoom out reveal, 6 seconds duration, hopeful atmosphere"
+    }
+  ]
+}

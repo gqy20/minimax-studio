@@ -1,0 +1,42 @@
+{
+  "job_id": "bf3a20e4-2aff-4f2a-818f-aa6b80d39ff1",
+  "status": "completed",
+  "progress": 1,
+  "stage": "voice",
+  "created_at": "2026-04-02T02:19:25.622397751Z",
+  "updated_at": "2026-04-02T02:19:27.164141243Z",
+  "request": {
+    "text": "海风从旧码头吹过，纸船沿着微光漂向远方。",
+    "voice_id": "Chinese (Mandarin)_Sweet_Lady",
+    "model": "",
+    "audio_format": "mp3"
+  },
+  "output": {
+    "output_path": "output/bf3a20e4-2aff-4f2a-818f-aa6b80d39ff1/voice.mp3"
+  },
+  "logs": [
+    {
+      "time": "2026-04-02T02:19:25.622397751Z",
+      "message": "job created for voice"
+    },
+    {
+      "time": "2026-04-02T02:19:25.622840983Z",
+      "message": "synthesizing speech..."
+    },
+    {
+      "time": "2026-04-02T02:19:27.163821874Z",
+      "message": "audio saved to: output/bf3a20e4-2aff-4f2a-818f-aa6b80d39ff1/voice.mp3"
+    },
+    {
+      "time": "2026-04-02T02:19:27.164141243Z",
+      "message": "job completed"
+    }
+  ],
+  "artifacts": [
+    {
+      "label": "voice",
+      "kind": "audio",
+      "path": "output/bf3a20e4-2aff-4f2a-818f-aa6b80d39ff1/voice.mp3"
+    }
+  ]
+}

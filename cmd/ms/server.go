@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	serverPort      string
-	serverOutputDir string
+	serverPort        string
+	serverOutputDir   string
 	serverOpenBrowser bool
 )
 

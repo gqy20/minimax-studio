@@ -1,0 +1,73 @@
+{
+  "job_id": "28ad8042-1a23-4569-b5ef-b472998a568d",
+  "status": "completed",
+  "progress": 1,
+  "stage": "plan",
+  "created_at": "2026-04-02T02:11:51.603308394Z",
+  "updated_at": "2026-04-02T02:12:06.124131209Z",
+  "request": {
+    "theme": "清晨薄雾里的旧码头，一只纸船慢慢漂向远处灯塔",
+    "scene_count": 3,
+    "scene_duration": 6,
+    "language": "zh"
+  },
+  "output": {
+    "output_dir": "output/28ad8042-1a23-4569-b5ef-b472998a568d",
+    "plan_path": "output/28ad8042-1a23-4569-b5ef-b472998a568d/plan.json",
+    "narration_path": "output/28ad8042-1a23-4569-b5ef-b472998a568d/voice.txt"
+  },
+  "logs": [
+    {
+      "time": "2026-04-02T02:11:51.603308394Z",
+      "message": "job created for plan"
+    },
+    {
+      "time": "2026-04-02T02:11:51.603801387Z",
+      "message": "step 1/2: generating scene plan..."
+    },
+    {
+      "time": "2026-04-02T02:12:06.121332219Z",
+      "message": "plan saved to: output/28ad8042-1a23-4569-b5ef-b472998a568d/plan.json"
+    },
+    {
+      "time": "2026-04-02T02:12:06.121794389Z",
+      "message": "narration saved to: output/28ad8042-1a23-4569-b5ef-b472998a568d/voice.txt"
+    },
+    {
+      "time": "2026-04-02T02:12:06.122285045Z",
+      "message": "step 2/2: plan summary"
+    },
+    {
+      "time": "2026-04-02T02:12:06.122782269Z",
+      "message": "  title: 雾中灯塔"
+    },
+    {
+      "time": "2026-04-02T02:12:06.123147372Z",
+      "message": "  visual style: 水墨淡彩电影感，低饱和度青灰色调，东方意境，薄雾氛围"
+    },
+    {
+      "time": "2026-04-02T02:12:06.123523549Z",
+      "message": "  scenes: 3"
+    },
+    {
+      "time": "2026-04-02T02:12:06.12379816Z",
+      "message": "  narration: 清晨的薄雾笼罩着旧码头，一只纸船缓缓驶出，驶向远方灯塔的微光。"
+    },
+    {
+      "time": "2026-04-02T02:12:06.124131209Z",
+      "message": "job completed"
+    }
+  ],
+  "artifacts": [
+    {
+      "label": "plan",
+      "kind": "json",
+      "path": "output/28ad8042-1a23-4569-b5ef-b472998a568d/plan.json"
+    },
+    {
+      "label": "narration_text",
+      "kind": "text",
+      "path": "output/28ad8042-1a23-4569-b5ef-b472998a568d/voice.txt"
+    }
+  ]
+}

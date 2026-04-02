@@ -13,11 +13,11 @@ import (
 )
 
 var (
-	musicPrompt      string
-	musicOutputPath  string
-	musicModel       string
-	musicFormat      string
-	musicJSONOutput  bool
+	musicPrompt     string
+	musicOutputPath string
+	musicModel      string
+	musicFormat     string
+	musicJSONOutput bool
 )
 
 var musicCmd = &cobra.Command{

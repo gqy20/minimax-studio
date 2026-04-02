@@ -1,0 +1,41 @@
+{
+  "job_id": "000b9144-593e-4b50-9b5e-493848bc8739",
+  "status": "completed",
+  "progress": 1,
+  "stage": "music",
+  "created_at": "2026-04-02T01:42:16.881234407Z",
+  "updated_at": "2026-04-02T01:44:11.871284475Z",
+  "request": {
+    "prompt": "warm cinematic piano with soft ambient texture, no vocals",
+    "model": "",
+    "audio_format": "mp3"
+  },
+  "output": {
+    "output_path": "output/000b9144-593e-4b50-9b5e-493848bc8739/music.mp3"
+  },
+  "logs": [
+    {
+      "time": "2026-04-02T01:42:16.881234407Z",
+      "message": "job created for music"
+    },
+    {
+      "time": "2026-04-02T01:42:16.881784653Z",
+      "message": "generating music..."
+    },
+    {
+      "time": "2026-04-02T01:44:11.870959585Z",
+      "message": "music saved to: output/000b9144-593e-4b50-9b5e-493848bc8739/music.mp3"
+    },
+    {
+      "time": "2026-04-02T01:44:11.871284475Z",
+      "message": "job completed"
+    }
+  ],
+  "artifacts": [
+    {
+      "label": "music",
+      "kind": "audio",
+      "path": "output/000b9144-593e-4b50-9b5e-493848bc8739/music.mp3"
+    }
+  ]
+}

@@ -11,10 +11,10 @@ type ScenePlan struct {
 
 // VideoPlan 完整分镜规划
 type VideoPlan struct {
-	Title       string       `json:"title"`
-	VisualStyle string       `json:"visual_style"`
-	Narration   string       `json:"narration"`
-	MusicPrompt string       `json:"music_prompt"`
+	Title       string      `json:"title"`
+	VisualStyle string      `json:"visual_style"`
+	Narration   string      `json:"narration"`
+	MusicPrompt string      `json:"music_prompt"`
 	Scenes      []ScenePlan `json:"scenes"`
 }
 
@@ -141,15 +141,15 @@ type JobArtifact struct {
 
 // Job 任务状态
 type Job struct {
-	JobID      string        `json:"job_id"`
-	Status     string        `json:"status"` // pending, processing, completed, failed
-	Progress   float64       `json:"progress"`
-	Stage      string        `json:"stage"`
-	CreatedAt  time.Time     `json:"created_at"`
-	UpdatedAt  time.Time     `json:"updated_at"`
-	Request    interface{}   `json:"request,omitempty"`
-	Output     interface{}   `json:"output,omitempty"`
-	Error      string        `json:"error,omitempty"`
-	Logs       []JobEvent    `json:"logs,omitempty"`
-	Artifacts  []JobArtifact `json:"artifacts,omitempty"`
+	JobID     string        `json:"job_id"`
+	Status    string        `json:"status"` // pending, processing, completed, failed
+	Progress  float64       `json:"progress"`
+	Stage     string        `json:"stage"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Request   interface{}   `json:"request,omitempty"`
+	Output    interface{}   `json:"output,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	Logs      []JobEvent    `json:"logs,omitempty"`
+	Artifacts []JobArtifact `json:"artifacts,omitempty"`
 }

@@ -37,11 +37,11 @@ type MakeOptions struct {
 
 // MakeResult 全流程结果
 type MakeResult struct {
-	OutputDir      string  `json:"output_dir"`
-	PlanPath       string  `json:"plan_path"`
-	NarrationPath  string  `json:"narration_path"`
-	MusicPath      string  `json:"music_path,omitempty"`
-	FinalVideoPath string  `json:"final_video_path"`
+	OutputDir      string `json:"output_dir"`
+	PlanPath       string `json:"plan_path"`
+	NarrationPath  string `json:"narration_path"`
+	MusicPath      string `json:"music_path,omitempty"`
+	FinalVideoPath string `json:"final_video_path"`
 }
 
 // MakeWorkflow 全流程工作流

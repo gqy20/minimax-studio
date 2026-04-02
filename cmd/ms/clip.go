@@ -63,15 +63,15 @@ func runClip(cmd *cobra.Command, args []string) error {
 	cli := client.NewClient(getAPIKey())
 
 	opts := schemas.ClipOptions{
-		ImagePrompt:   clipPrompt,
-		VideoPrompt:   clipSubject,
-		AspectRatio:   clipAspectRatio,
-		VideoModel:    clipModel,
-		Duration:      clipDuration,
-		Resolution:    clipResolution,
-		PollInterval:  3,
-		MaxWait:       300,
-		OutputPrefix:  clipOutputPrefix,
+		ImagePrompt:  clipPrompt,
+		VideoPrompt:  clipSubject,
+		AspectRatio:  clipAspectRatio,
+		VideoModel:   clipModel,
+		Duration:     clipDuration,
+		Resolution:   clipResolution,
+		PollInterval: 3,
+		MaxWait:      300,
+		OutputPrefix: clipOutputPrefix,
 	}
 
 	workflow := workflows.NewClipWorkflow(cli)

@@ -323,8 +323,8 @@ func (c *MiniMaxClient) DownloadFile(ctx context.Context, url string) ([]byte, e
 // SynthesizeSpeech 语音合成，返回音频二进制数据
 func (c *MiniMaxClient) SynthesizeSpeech(ctx context.Context, text, voiceID, ttsModel, audioFormat string) ([]byte, error) {
 	payload := map[string]interface{}{
-		"model": ttsModel,
-		"text":  text,
+		"model":  ttsModel,
+		"text":   text,
 		"stream": false,
 		"voice_setting": map[string]interface{}{
 			"voice_id": voiceID,
@@ -367,10 +367,10 @@ func (c *MiniMaxClient) SynthesizeSpeech(ctx context.Context, text, voiceID, tts
 // GenerateMusic 生成音乐，返回音频二进制数据
 func (c *MiniMaxClient) GenerateMusic(ctx context.Context, prompt, musicModel, audioFormat string) ([]byte, error) {
 	payload := map[string]interface{}{
-		"model":         musicModel,
-		"prompt":        prompt,
-		"stream":        false,
-		"output_format": "hex",
+		"model":          musicModel,
+		"prompt":         prompt,
+		"stream":         false,
+		"output_format":  "hex",
 		"aigc_watermark": false,
 		"audio_setting": map[string]interface{}{
 			"sample_rate": 44100,
