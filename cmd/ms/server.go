@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
 	"runtime"
 
@@ -32,30 +31,64 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, args []string) error {
-	// Check ffmpeg dependency
-	if err := checkFFmpeg(); err != nil {
-		log.Printf("WARNING: %v", err)
-		log.Printf("Video stitching and composition will not work without ffmpeg.")
-		log.Printf("Install ffmpeg: https://ffmpeg.org/download.html")
+	addr := ":" + serverPort
+	url := fmt.Sprintf("http://localhost%s", addr)
+
+	fmt.Println()
+	fmt.Println("╔══════════════════════════════════════════╗")
+	fmt.Println("║          MiniMax Studio                  ║")
+	if Version != "" {
+		fmt.Printf("║  Version: %-34s║\n", Version)
+	}
+	fmt.Println("╚══════════════════════════════════════════╝")
+	fmt.Println()
+
+	// Check API key
+	apiKey := getAPIKey()
+	if apiKey == "" {
+		fmt.Println("  [!] 未检测到 API Key")
+		fmt.Println("      请设置环境变量 MINIMAX_API_KEY，或使用 --api-key 参数")
+		fmt.Println("      获取地址: https://platform.minimaxi.com/")
 		fmt.Println()
+	} else {
+		masked := apiKey
+		if len(apiKey) > 8 {
+			masked = apiKey[:4] + "****" + apiKey[len(apiKey)-4:]
+		}
+		fmt.Printf("  [✓] API Key: %s\n", masked)
 	}
 
-	apiKey := getAPIKey()
+	// Check ffmpeg dependency
+	if err := checkFFmpeg(); err != nil {
+		fmt.Println()
+		fmt.Println("  [!] 未检测到 ffmpeg / ffprobe")
+		fmt.Println("      视频拼接和合成功能将不可用")
+		fmt.Println("      安装地址: https://ffmpeg.org/download.html")
+		fmt.Println()
+	} else {
+		fmt.Println("  [✓] ffmpeg: 已就绪")
+	}
 
 	// Use embedded frontend if available, otherwise try local dist
 	frontendDir := api.EmbeddedFrontendDir()
+	if frontendDir == "" {
+		fmt.Println("  [!] 前端资源未嵌入（将使用本地 frontend/dist）")
+	}
 
-	s := api.NewServer(serverOutputDir, apiKey, frontendDir)
-	addr := ":" + serverPort
-	url := fmt.Sprintf("http://localhost%s", addr)
+	fmt.Println()
+	fmt.Printf("  正在启动服务器 -> %s\n", url)
+	fmt.Printf("  输出目录: %s\n", serverOutputDir)
+	fmt.Println()
+	fmt.Println("  按 Ctrl+C 停止服务器")
+	fmt.Println()
 
 	// Auto-open browser
 	if serverOpenBrowser {
 		go openBrowser(url)
 	}
 
-	log.Printf("Starting MiniMax Studio on %s", url)
-	log.Printf("Open %s in your browser to get started.", url)
+	s := api.NewServer(serverOutputDir, apiKey, frontendDir)
+
 	return s.Run(addr)
 }
 

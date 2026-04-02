@@ -27,6 +27,12 @@ func init() {
 }
 
 func main() {
+	// When run with no arguments (e.g. double-clicked on Windows),
+	// auto-start the HTTP server so it works like a GUI app.
+	if len(os.Args) <= 1 {
+		os.Args = append(os.Args, "server")
+	}
+
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
