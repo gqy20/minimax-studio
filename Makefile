@@ -1,4 +1,4 @@
-.PHONY: build build-all clean test lint fmt deps run frontend-install frontend-build frontend-dev help
+.PHONY: build build-all clean test lint fmt deps run dev frontend-install frontend-build frontend-dev help
 
 # Go parameters
 GOCMD=go
@@ -67,6 +67,9 @@ deps:
 run: build
 	./$(BINARY_DIR)/$(BINARY_NAME) $(ARGS)
 
+dev:
+	bash scripts/dev.sh
+
 # Frontend
 frontend-install:
 	cd frontend && npm install
@@ -91,6 +94,7 @@ help:
 	@echo "  fmt         - Format code"
 	@echo "  deps        - Download and tidy dependencies"
 	@echo "  run         - Build and run locally"
+	@echo "  dev         - Start backend and frontend together"
 	@echo "  frontend-install - Install frontend dependencies"
 	@echo "  frontend-build   - Build frontend"
 	@echo "  frontend-dev     - Run frontend dev server"

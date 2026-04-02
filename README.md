@@ -88,11 +88,30 @@ export MINIMAX_GROUP_ID=your_group_id
 
 ### 启动方式
 
+最简单的方式：
+
+```bash
+MINIMAX_API_KEY=your_api_key make dev
+```
+
+这会自动：
+
+- 检查并构建 `bin/ms`
+- 在 `127.0.0.1:8037` 启动 Go API Server
+- 在 `0.0.0.0:3023` 启动前端开发服务器
+- 退出时一起关闭后端进程
+
+如需自定义端口：
+
+```bash
+MINIMAX_API_KEY=your_api_key BACKEND_PORT=8081 FRONTEND_PORT=3001 make dev
+```
+
 先启动 Go server：
 
 ```bash
 export MINIMAX_API_KEY=your_api_key
-./bin/ms server --port 8080
+./bin/ms server --port 8037
 ```
 
 再启动前端：
@@ -103,25 +122,25 @@ npm install
 npm run dev
 ```
 
-默认前端会监听 `0.0.0.0:3000`，所以除了本机 `http://localhost:3000`，也可以直接通过内网 IP 访问，例如：
+默认前端会监听 `0.0.0.0:3023`，所以除了本机 `http://localhost:3023`，也可以直接通过内网 IP 访问，例如：
 
 ```bash
-http://192.168.1.23:3000
+http://192.168.1.23:3023
 ```
 
 前提是：
 
-- Go server 已启动在 `8080`
-- 当前机器防火墙允许 `3000` 和 `8080`
+- Go server 已启动在 `8037`
+- 当前机器防火墙允许 `3023` 和 `8037`
 - 访问设备与开发机处于同一局域网
 
-前端开发代理默认转发到 `http://127.0.0.1:8080`。
+前端开发代理默认转发到 `http://127.0.0.1:8037`。
 
 如果你要改端口或代理目标，可这样启动：
 
 ```bash
 cd frontend
-FRONTEND_HOST=0.0.0.0 FRONTEND_PORT=3001 VITE_PROXY_TARGET=http://127.0.0.1:8081 npm run dev
+FRONTEND_HOST=0.0.0.0 FRONTEND_PORT=3024 VITE_PROXY_TARGET=http://127.0.0.1:8038 npm run dev
 ```
 
 也可以直接用：
@@ -133,7 +152,7 @@ make frontend-dev-lan
 如果前端和后端不在同一地址，可设置：
 
 ```bash
-export VITE_API_BASE_URL=http://localhost:8080
+export VITE_API_BASE_URL=http://localhost:8037
 ```
 
 ## 构建
