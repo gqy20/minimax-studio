@@ -121,12 +121,30 @@ type QuotaResult struct {
 	Entries []QuotaInfo `json:"entries"`
 }
 
+// JobEvent 任务日志事件
+type JobEvent struct {
+	Time    time.Time `json:"time"`
+	Message string    `json:"message"`
+}
+
+// JobArtifact 任务产物
+type JobArtifact struct {
+	Label string `json:"label"`
+	Kind  string `json:"kind"`
+	Path  string `json:"path"`
+}
+
 // Job 任务状态
 type Job struct {
-	JobID    string      `json:"job_id"`
-	Status   string      `json:"status"` // pending, processing, completed, failed
-	Progress float64     `json:"progress"`
-	Stage    string      `json:"stage"`
-	Output   interface{} `json:"output,omitempty"`
-	Error    string      `json:"error,omitempty"`
+	JobID      string        `json:"job_id"`
+	Status     string        `json:"status"` // pending, processing, completed, failed
+	Progress   float64       `json:"progress"`
+	Stage      string        `json:"stage"`
+	CreatedAt  time.Time     `json:"created_at"`
+	UpdatedAt  time.Time     `json:"updated_at"`
+	Request    interface{}   `json:"request,omitempty"`
+	Output     interface{}   `json:"output,omitempty"`
+	Error      string        `json:"error,omitempty"`
+	Logs       []JobEvent    `json:"logs,omitempty"`
+	Artifacts  []JobArtifact `json:"artifacts,omitempty"`
 }

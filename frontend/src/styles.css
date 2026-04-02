@@ -268,8 +268,15 @@ a {
 
 .history-chip {
   max-width: 100%;
+  display: grid;
+  gap: 4px;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.history-chip small {
+  color: var(--muted);
 }
 
 .status-badge {
@@ -352,6 +359,40 @@ a {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.log-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+}
+
+.log-list {
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.log-row {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(4, 8, 16, 0.46);
+}
+
+.log-row span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.log-row p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 .artifact-card {

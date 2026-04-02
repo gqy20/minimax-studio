@@ -2,11 +2,17 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -43,6 +49,7 @@ func NewServer(outputDir, apiKey string) *Server {
 		client:    client.NewClient(apiKey),
 	}
 
+	s.loadJobsFromDisk()
 	s.setupRoutes()
 	return s
 }
@@ -69,6 +76,7 @@ func (s *Server) setupRoutes() {
 
 	v1 := s.engine.Group("/api/v1")
 	{
+		v1.GET("/jobs", s.listJobs)
 		v1.GET("/jobs/:id", s.getJob)
 		v1.POST("/clip", s.handleClip)
 		v1.POST("/plan", s.handlePlan)
@@ -81,18 +89,205 @@ func (s *Server) setupRoutes() {
 	}
 }
 
+var stepPattern = regexp.MustCompile(`step\s+(\d+)/(\d+)`)
+
+func (s *Server) createJob(jobID, stage string, request interface{}) *schemas.Job {
+	now := time.Now().UTC()
+	job := &schemas.Job{
+		JobID:     jobID,
+		Status:    "processing",
+		Stage:     stage,
+		Progress:  0,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Request:   request,
+	}
+	job.Logs = []schemas.JobEvent{{
+		Time:    now,
+		Message: fmt.Sprintf("job created for %s", stage),
+	}}
+
+	s.jobsMu.Lock()
+	s.jobs[jobID] = job
+	s.persistJobLocked(job)
+	s.jobsMu.Unlock()
+
+	return job
+}
+
+func (s *Server) appendJobLog(jobID, message string) {
+	s.jobsMu.Lock()
+	defer s.jobsMu.Unlock()
+
+	job, ok := s.jobs[jobID]
+	if !ok {
+		return
+	}
+
+	now := time.Now().UTC()
+	job.Stage = message
+	job.UpdatedAt = now
+	if progress, ok := parseProgress(message); ok && progress > job.Progress {
+		job.Progress = progress
+	}
+
+	job.Logs = append(job.Logs, schemas.JobEvent{
+		Time:    now,
+		Message: message,
+	})
+	if len(job.Logs) > 50 {
+		job.Logs = append([]schemas.JobEvent(nil), job.Logs[len(job.Logs)-50:]...)
+	}
+
+	s.persistJobLocked(job)
+}
+
 func (s *Server) updateJob(jobID, status, stage string, progress float64, output interface{}, errStr string) {
 	s.jobsMu.Lock()
 	defer s.jobsMu.Unlock()
 
-	if job, ok := s.jobs[jobID]; ok {
-		job.Status = status
-		job.Stage = stage
-		job.Progress = progress
-		job.Output = output
-		if errStr != "" {
-			job.Error = errStr
+	job, ok := s.jobs[jobID]
+	if !ok {
+		return
+	}
+
+	now := time.Now().UTC()
+	job.Status = status
+	job.Stage = stage
+	job.Progress = progress
+	job.Output = output
+	job.UpdatedAt = now
+	job.Artifacts = collectArtifacts(output)
+	if errStr != "" {
+		job.Error = errStr
+		job.Logs = append(job.Logs, schemas.JobEvent{
+			Time:    now,
+			Message: "error: " + errStr,
+		})
+	} else {
+		job.Error = ""
+		job.Logs = append(job.Logs, schemas.JobEvent{
+			Time:    now,
+			Message: fmt.Sprintf("job %s", status),
+		})
+	}
+	if len(job.Logs) > 50 {
+		job.Logs = append([]schemas.JobEvent(nil), job.Logs[len(job.Logs)-50:]...)
+	}
+
+	s.persistJobLocked(job)
+}
+
+func parseProgress(message string) (float64, bool) {
+	matches := stepPattern.FindStringSubmatch(strings.ToLower(message))
+	if len(matches) != 3 {
+		return 0, false
+	}
+
+	var current, total int
+	if _, err := fmt.Sscanf(matches[0], "step %d/%d", &current, &total); err != nil || total <= 0 {
+		return 0, false
+	}
+
+	progress := float64(current-1) / float64(total)
+	if progress < 0 {
+		progress = 0
+	}
+	return progress, true
+}
+
+func collectArtifacts(output interface{}) []schemas.JobArtifact {
+	var artifacts []schemas.JobArtifact
+
+	add := func(label, kind, path string) {
+		if path == "" {
+			return
 		}
+		artifacts = append(artifacts, schemas.JobArtifact{
+			Label: label,
+			Kind:  kind,
+			Path:  path,
+		})
+	}
+
+	switch result := output.(type) {
+	case *schemas.ClipResult:
+		add("image", "image", result.ImagePath)
+		add("video", "video", result.VideoPath)
+	case *schemas.PlanResult:
+		add("plan", "json", result.PlanPath)
+		add("narration_text", "text", result.NarrationPath)
+	case *schemas.VoiceResult:
+		add("voice", "audio", result.OutputPath)
+	case *schemas.MusicResult:
+		add("music", "audio", result.OutputPath)
+	case *schemas.StitchResult:
+		add("stitched_video", "video", result.StitchedVideoPath)
+		add("timed_video", "video", result.PaddedVideoPath)
+		add("final_video", "video", result.FinalVideoPath)
+	case *workflows.MakeResult:
+		add("plan", "json", result.PlanPath)
+		add("narration", "audio", result.NarrationPath)
+		add("music", "audio", result.MusicPath)
+		add("final_video", "video", result.FinalVideoPath)
+	}
+
+	return artifacts
+}
+
+func (s *Server) jobFilePath(jobID string) string {
+	return filepath.Join(s.outputDir, jobID, "job.json")
+}
+
+func (s *Server) persistJobLocked(job *schemas.Job) {
+	if job == nil {
+		return
+	}
+
+	jobPath := s.jobFilePath(job.JobID)
+	if err := os.MkdirAll(filepath.Dir(jobPath), 0755); err != nil {
+		log.Printf("failed to create job dir for %s: %v", job.JobID, err)
+		return
+	}
+
+	data, err := json.MarshalIndent(job, "", "  ")
+	if err != nil {
+		log.Printf("failed to marshal job %s: %v", job.JobID, err)
+		return
+	}
+
+	if err := os.WriteFile(jobPath, data, 0644); err != nil {
+		log.Printf("failed to persist job %s: %v", job.JobID, err)
+	}
+}
+
+func (s *Server) loadJobsFromDisk() {
+	entries, err := os.ReadDir(s.outputDir)
+	if err != nil {
+		return
+	}
+
+	s.jobsMu.Lock()
+	defer s.jobsMu.Unlock()
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		jobPath := filepath.Join(s.outputDir, entry.Name(), "job.json")
+		data, err := os.ReadFile(jobPath)
+		if err != nil {
+			continue
+		}
+
+		var job schemas.Job
+		if err := json.Unmarshal(data, &job); err != nil {
+			log.Printf("failed to load job metadata %s: %v", jobPath, err)
+			continue
+		}
+
+		s.jobs[job.JobID] = &job
 	}
 }
 
@@ -118,10 +313,7 @@ func (s *Server) handleClip(c *gin.Context) {
 	jobDir := filepath.Join(s.outputDir, jobID)
 	os.MkdirAll(jobDir, 0755)
 
-	job := &schemas.Job{JobID: jobID, Status: "processing", Stage: "clip", Progress: 0}
-	s.jobsMu.Lock()
-	s.jobs[jobID] = job
-	s.jobsMu.Unlock()
+	s.createJob(jobID, "clip", req)
 
 	go func() {
 		ctx := context.Background()
@@ -140,6 +332,7 @@ func (s *Server) handleClip(c *gin.Context) {
 		wf := workflows.NewClipWorkflow(s.client)
 		result, err := wf.Run(ctx, opts, func(stage string) {
 			log.Printf("[job:%s] %s", jobID, stage)
+			s.appendJobLog(jobID, stage)
 		})
 
 		if err != nil {
@@ -173,10 +366,7 @@ func (s *Server) handlePlan(c *gin.Context) {
 	jobDir := filepath.Join(s.outputDir, jobID)
 	os.MkdirAll(jobDir, 0755)
 
-	job := &schemas.Job{JobID: jobID, Status: "processing", Stage: "plan", Progress: 0}
-	s.jobsMu.Lock()
-	s.jobs[jobID] = job
-	s.jobsMu.Unlock()
+	s.createJob(jobID, "plan", req)
 
 	go func() {
 		ctx := context.Background()
@@ -193,6 +383,7 @@ func (s *Server) handlePlan(c *gin.Context) {
 		wf := workflows.NewPlanWorkflow(s.client)
 		result, err := wf.Run(ctx, opts, func(stage string) {
 			log.Printf("[job:%s] %s", jobID, stage)
+			s.appendJobLog(jobID, stage)
 		})
 
 		if err != nil {
@@ -226,10 +417,7 @@ func (s *Server) handleVoice(c *gin.Context) {
 	jobDir := filepath.Join(s.outputDir, jobID)
 	os.MkdirAll(jobDir, 0755)
 
-	job := &schemas.Job{JobID: jobID, Status: "processing", Stage: "voice", Progress: 0}
-	s.jobsMu.Lock()
-	s.jobs[jobID] = job
-	s.jobsMu.Unlock()
+	s.createJob(jobID, "voice", req)
 
 	go func() {
 		ctx := context.Background()
@@ -245,6 +433,7 @@ func (s *Server) handleVoice(c *gin.Context) {
 		wf := workflows.NewVoiceWorkflow(s.client)
 		result, err := wf.Run(ctx, opts, func(stage string) {
 			log.Printf("[job:%s] %s", jobID, stage)
+			s.appendJobLog(jobID, stage)
 		})
 
 		if err != nil {
@@ -277,10 +466,7 @@ func (s *Server) handleMusic(c *gin.Context) {
 	jobDir := filepath.Join(s.outputDir, jobID)
 	os.MkdirAll(jobDir, 0755)
 
-	job := &schemas.Job{JobID: jobID, Status: "processing", Stage: "music", Progress: 0}
-	s.jobsMu.Lock()
-	s.jobs[jobID] = job
-	s.jobsMu.Unlock()
+	s.createJob(jobID, "music", req)
 
 	go func() {
 		ctx := context.Background()
@@ -295,6 +481,7 @@ func (s *Server) handleMusic(c *gin.Context) {
 		wf := workflows.NewMusicWorkflow(s.client)
 		result, err := wf.Run(ctx, opts, func(stage string) {
 			log.Printf("[job:%s] %s", jobID, stage)
+			s.appendJobLog(jobID, stage)
 		})
 
 		if err != nil {
@@ -327,10 +514,7 @@ func (s *Server) handleStitch(c *gin.Context) {
 	jobDir := filepath.Join(s.outputDir, jobID)
 	os.MkdirAll(jobDir, 0755)
 
-	job := &schemas.Job{JobID: jobID, Status: "processing", Stage: "stitch", Progress: 0}
-	s.jobsMu.Lock()
-	s.jobs[jobID] = job
-	s.jobsMu.Unlock()
+	s.createJob(jobID, "stitch", req)
 
 	go func() {
 		opts := schemas.StitchOptions{
@@ -343,6 +527,7 @@ func (s *Server) handleStitch(c *gin.Context) {
 		wf := workflows.NewStitchWorkflow()
 		result, err := wf.Run(opts, func(stage string) {
 			log.Printf("[job:%s] %s", jobID, stage)
+			s.appendJobLog(jobID, stage)
 		})
 
 		if err != nil {
@@ -377,10 +562,7 @@ func (s *Server) handleMake(c *gin.Context) {
 	jobDir := filepath.Join(s.outputDir, jobID)
 	os.MkdirAll(jobDir, 0755)
 
-	job := &schemas.Job{JobID: jobID, Status: "processing", Stage: "make", Progress: 0}
-	s.jobsMu.Lock()
-	s.jobs[jobID] = job
-	s.jobsMu.Unlock()
+	s.createJob(jobID, "make", req)
 
 	go func() {
 		ctx := context.Background()
@@ -408,6 +590,7 @@ func (s *Server) handleMake(c *gin.Context) {
 		wf := workflows.NewMakeWorkflow(s.client)
 		result, err := wf.Run(ctx, opts, func(stage string) {
 			log.Printf("[job:%s] %s", jobID, stage)
+			s.appendJobLog(jobID, stage)
 		})
 
 		if err != nil {
@@ -435,6 +618,21 @@ func (s *Server) handleQuota(c *gin.Context) {
 
 // --- Jobs ---
 
+func (s *Server) listJobs(c *gin.Context) {
+	s.jobsMu.RLock()
+	jobs := make([]*schemas.Job, 0, len(s.jobs))
+	for _, job := range s.jobs {
+		jobs = append(jobs, job)
+	}
+	s.jobsMu.RUnlock()
+
+	sort.Slice(jobs, func(i, j int) bool {
+		return jobs[i].UpdatedAt.After(jobs[j].UpdatedAt)
+	})
+
+	c.JSON(http.StatusOK, gin.H{"jobs": jobs})
+}
+
 func (s *Server) getJob(c *gin.Context) {
 	jobID := c.Param("id")
 
@@ -443,8 +641,14 @@ func (s *Server) getJob(c *gin.Context) {
 	s.jobsMu.RUnlock()
 
 	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
-		return
+		s.loadJobsFromDisk()
+		s.jobsMu.RLock()
+		job, exists = s.jobs[jobID]
+		s.jobsMu.RUnlock()
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "job not found"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, job)

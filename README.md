@@ -65,6 +65,7 @@ make run -- clip -p "prompt" -s "subject" -o output/clip
 # POST /api/v1/music
 # POST /api/v1/stitch
 # POST /api/v1/make
+# GET  /api/v1/jobs
 # GET  /api/v1/quota
 # GET  /api/v1/jobs/:id
 ```

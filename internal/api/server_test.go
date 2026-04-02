@@ -3,8 +3,13 @@ package api
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/minimax-ai/minimax-studio/internal/schemas"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -34,6 +39,71 @@ func TestGetJob_NotFound(t *testing.T) {
 
 	if w.Code != 404 {
 		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestListJobs(t *testing.T) {
+	s := NewServer(t.TempDir(), "test-key")
+	s.createJob("older", "clip", map[string]string{"theme": "a"})
+	s.createJob("newer", "make", map[string]string{"theme": "b"})
+	s.updateJob("older", "completed", "clip", 1.0, nil, "")
+	time.Sleep(10 * time.Millisecond)
+	s.updateJob("newer", "processing", "step 1/7: planning storyboard...", 0.1, nil, "")
+
+	req := httptest.NewRequest("GET", "/api/v1/jobs", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Jobs []schemas.Job `json:"jobs"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode jobs: %v", err)
+	}
+
+	if len(resp.Jobs) != 2 {
+		t.Fatalf("expected 2 jobs, got %d", len(resp.Jobs))
+	}
+	if resp.Jobs[0].JobID != "newer" {
+		t.Fatalf("expected newest job first, got %s", resp.Jobs[0].JobID)
+	}
+}
+
+func TestGetJob_LoadsPersistedJob(t *testing.T) {
+	outputDir := t.TempDir()
+	s := NewServer(outputDir, "test-key")
+	s.createJob("persisted", "make", map[string]string{"theme": "paper boat"})
+	s.appendJobLog("persisted", "step 1/7: planning storyboard...")
+	s.updateJob("persisted", "completed", "make", 1.0, nil, "")
+
+	reloaded := NewServer(outputDir, "test-key")
+	req := httptest.NewRequest("GET", "/api/v1/jobs/persisted", nil)
+	w := httptest.NewRecorder()
+	reloaded.engine.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var job schemas.Job
+	if err := json.Unmarshal(w.Body.Bytes(), &job); err != nil {
+		t.Fatalf("failed to decode job: %v", err)
+	}
+
+	if job.JobID != "persisted" {
+		t.Fatalf("expected persisted job, got %s", job.JobID)
+	}
+	if len(job.Logs) == 0 {
+		t.Fatal("expected persisted logs")
+	}
+
+	jobPath := filepath.Join(outputDir, "persisted", "job.json")
+	if _, err := os.Stat(jobPath); err != nil {
+		t.Fatalf("expected job.json to exist: %v", err)
 	}
 }
 

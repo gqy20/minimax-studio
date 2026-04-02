@@ -21,8 +21,23 @@ type Job = {
   status: "pending" | "processing" | "completed" | "failed";
   progress: number;
   stage: string;
+  created_at?: string;
+  updated_at?: string;
   output?: MakeResult;
   error?: string;
+  logs?: Array<{
+    time: string;
+    message: string;
+  }>;
+  artifacts?: Array<{
+    label: string;
+    kind: string;
+    path: string;
+  }>;
+};
+
+type JobListResult = {
+  jobs: Job[];
 };
 
 type QuotaEntry = {
@@ -142,7 +157,7 @@ function formatStatus(status: Job["status"]) {
 export default function App() {
   const [form, setForm] = useState<MakeRequest>(DEFAULT_FORM);
   const [job, setJob] = useState<Job | null>(null);
-  const [jobHistory, setJobHistory] = useState<string[]>([]);
+  const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [quota, setQuota] = useState<QuotaResult | null>(null);
   const [plan, setPlan] = useState<PlanData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -152,20 +167,30 @@ export default function App() {
   const [submitError, setSubmitError] = useState("");
 
   const artifacts = useMemo(() => {
-    if (!job?.output) {
+    if (!job) {
       return null;
     }
 
+    const fromArtifacts =
+      job.artifacts?.reduce<Record<string, string>>((accumulator, artifact) => {
+        accumulator[artifact.label] = toAssetUrl(job.job_id, artifact.path);
+        return accumulator;
+      }, {}) ?? {};
+
     return {
-      plan: toAssetUrl(job.job_id, job.output.plan_path),
-      narration: toAssetUrl(job.job_id, job.output.narration_path),
-      music: toAssetUrl(job.job_id, job.output.music_path),
-      finalVideo: toAssetUrl(job.job_id, job.output.final_video_path),
+      plan: fromArtifacts.plan ?? toAssetUrl(job.job_id, job.output?.plan_path),
+      narration:
+        fromArtifacts.narration ??
+        fromArtifacts.voice ??
+        toAssetUrl(job.job_id, job.output?.narration_path),
+      music: fromArtifacts.music ?? toAssetUrl(job.job_id, job.output?.music_path),
+      finalVideo:
+        fromArtifacts.final_video ?? toAssetUrl(job.job_id, job.output?.final_video_path),
     };
   }, [job]);
 
   useEffect(() => {
-    setJobHistory(loadHistory());
+    void fetchJobs();
   }, []);
 
   useEffect(() => {
@@ -219,6 +244,35 @@ export default function App() {
     }
   }
 
+  async function fetchJobs() {
+    try {
+      const result = await requestJSON<JobListResult>("/api/v1/jobs");
+      setRecentJobs(result.jobs.slice(0, 8));
+
+      const persistedHistory = loadHistory();
+      if (!job && !result.jobs.length && persistedHistory.length > 0) {
+        setRecentJobs(
+          persistedHistory.map((jobID) => ({
+            job_id: jobID,
+            status: "pending",
+            progress: 0,
+            stage: "unknown",
+          })),
+        );
+      }
+    } catch {
+      const persistedHistory = loadHistory();
+      setRecentJobs(
+        persistedHistory.map((jobID) => ({
+          job_id: jobID,
+          status: "pending",
+          progress: 0,
+          stage: "unknown",
+        })),
+      );
+    }
+  }
+
   async function fetchJob(jobID: string, focusJob = true) {
     setJobError("");
 
@@ -230,10 +284,11 @@ export default function App() {
         setJob((current) => (current?.job_id === jobID ? nextJob : current));
       }
 
-      setJobHistory((current) => {
-        const nextHistory = [jobID, ...current.filter((item) => item !== jobID)];
+      setRecentJobs((current) => {
+        const nextJobs = [nextJob, ...current.filter((item) => item.job_id !== jobID)].slice(0, 8);
+        const nextHistory = nextJobs.map((item) => item.job_id);
         saveHistory(nextHistory);
-        return nextHistory;
+        return nextJobs;
       });
     } catch (error) {
       setJobError(error instanceof Error ? error.message : "读取任务失败");
@@ -262,6 +317,7 @@ export default function App() {
       });
 
       await fetchJob(response.job_id);
+      await fetchJobs();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "任务提交失败");
     } finally {
@@ -398,20 +454,23 @@ export default function App() {
           <div className="history-block">
             <div className="history-header">
               <h3>最近任务</h3>
-              <span>保存在浏览器本地</span>
+              <button type="button" className="text-link history-refresh" onClick={() => void fetchJobs()}>
+                刷新列表
+              </button>
             </div>
             <div className="history-list">
-              {jobHistory.length === 0 ? (
+              {recentJobs.length === 0 ? (
                 <p className="muted-text">还没有任务记录。</p>
               ) : (
-                jobHistory.map((item) => (
+                recentJobs.map((item) => (
                   <button
-                    key={item}
+                    key={item.job_id}
                     className="history-chip"
                     type="button"
-                    onClick={() => void fetchJob(item)}
+                    onClick={() => void fetchJob(item.job_id)}
                   >
-                    {item}
+                    <span>{item.job_id}</span>
+                    <small>{formatStatus(item.status)}</small>
                   </button>
                 ))
               )}
@@ -477,6 +536,23 @@ export default function App() {
                   </a>
                 ) : null}
               </div>
+
+              {job.logs?.length ? (
+                <div className="log-panel">
+                  <div className="artifact-header">
+                    <h3>Recent Logs</h3>
+                    <span>{job.logs.length} entries</span>
+                  </div>
+                  <div className="log-list">
+                    {job.logs.slice().reverse().map((entry, index) => (
+                      <div className="log-row" key={`${entry.time}-${index}`}>
+                        <span>{new Date(entry.time).toLocaleString()}</span>
+                        <p>{entry.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               {artifacts ? (
                 <div className="artifact-grid">
