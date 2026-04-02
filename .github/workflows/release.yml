@@ -106,8 +106,13 @@ jobs:
           package_dir="package/${artifact_base}"
           mkdir -p "${package_dir}"
 
+          LDFLAGS="-X main.Version=${VERSION} -X main.BuildTime=${BUILD_DATE}"
+          if [[ "${GOOS}" == "windows" ]]; then
+            LDFLAGS="${LDFLAGS} -H windowsgui"
+          fi
+
           go build -trimpath \
-            -ldflags "-X main.Version=${VERSION} -X main.BuildTime=${BUILD_DATE}" \
+            -ldflags "${LDFLAGS}" \
             -tags embed_frontend \
             -o "${package_dir}/${BINARY_NAME}${ext}" ./cmd/ms
 

@@ -3,9 +3,20 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 )
+
+// runningAsGUI is set to true when the binary is launched with no arguments
+// (double-clicked), so we know to show error dialogs instead of silent exits.
+var runningAsGUI bool
+
+// isDoubleClick returns true when the binary is launched with no arguments,
+// which typically means it was double-clicked on Windows or macOS.
+func isDoubleClick() bool {
+	return len(os.Args) <= 1
+}
 
 var (
 	apiKey    string
@@ -29,12 +40,21 @@ func init() {
 func main() {
 	// When run with no arguments (e.g. double-clicked on Windows),
 	// auto-start the HTTP server so it works like a GUI app.
-	if len(os.Args) <= 1 {
+	if isDoubleClick() {
+		runningAsGUI = true
 		os.Args = append(os.Args, "server")
+		// In GUI mode on Windows, hide the console window
+		if runtime.GOOS == "windows" {
+			HideConsole()
+		}
 	}
 
 	if err := RootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if runningAsGUI && runtime.GOOS == "windows" {
+			ShowErrorDialog("MiniMax Studio", fmt.Sprintf("启动失败:\n\n%v", err))
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }

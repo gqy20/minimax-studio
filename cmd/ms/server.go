@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/minimax-ai/minimax-studio/internal/api"
@@ -30,64 +32,124 @@ func init() {
 	RootCmd.AddCommand(serverCmd)
 }
 
+// guiPrint prints a message. In GUI mode on Windows it also writes to a log file
+// so there's a debugging trail when no console is visible.
+func guiPrint(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	fmt.Println(msg)
+
+	if runningAsGUI && runtime.GOOS == "windows" {
+		writeLog(msg)
+	}
+}
+
+// writeLog appends a line to the log file in the output directory.
+func writeLog(msg string) {
+	dir := resolveOutputDir()
+	if dir == "" {
+		return
+	}
+	logFile := filepath.Join(dir, "studio.log")
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.WriteString(msg + "\n")
+}
+
+// resolveOutputDir returns the absolute path of the output directory.
+// This is critical when double-clicked: the working directory is the exe's folder,
+// and relative paths like "./output" would land next to the binary.
+func resolveOutputDir() string {
+	if serverOutputDir == "" {
+		serverOutputDir = "./output"
+	}
+	if !filepath.IsAbs(serverOutputDir) {
+		// Resolve relative to exe's directory when double-clicked,
+		// or current directory when running from terminal.
+		exePath, err := os.Executable()
+		if err == nil {
+			exeDir := filepath.Dir(exePath)
+			serverOutputDir = filepath.Join(exeDir, serverOutputDir)
+		} else {
+			abs, _ := filepath.Abs(serverOutputDir)
+			serverOutputDir = abs
+		}
+	}
+	return serverOutputDir
+}
+
 func runServer(cmd *cobra.Command, args []string) error {
 	addr := ":" + serverPort
 	url := fmt.Sprintf("http://localhost%s", addr)
 
-	fmt.Println()
-	fmt.Println("╔══════════════════════════════════════════╗")
-	fmt.Println("║          MiniMax Studio                  ║")
+	outputDir := resolveOutputDir()
+
+	guiPrint("")
+	guiPrint("╔══════════════════════════════════════════╗")
+	guiPrint("║          MiniMax Studio                  ║")
 	if Version != "" {
-		fmt.Printf("║  Version: %-34s║\n", Version)
+		guiPrint("║  Version: %-34s║", Version)
 	}
-	fmt.Println("╚══════════════════════════════════════════╝")
-	fmt.Println()
+	guiPrint("╚══════════════════════════════════════════╝")
+	guiPrint("")
 
 	// Check API key
 	apiKey := getAPIKey()
 	if apiKey == "" {
-		fmt.Println("  [!] 未检测到 API Key")
-		fmt.Println("      请设置环境变量 MINIMAX_API_KEY，或使用 --api-key 参数")
-		fmt.Println("      获取地址: https://platform.minimaxi.com/")
-		fmt.Println()
+		guiPrint("  [!] 未检测到 API Key")
+		guiPrint("      请设置环境变量 MINIMAX_API_KEY，或使用 --api-key 参数")
+		guiPrint("      获取地址: https://platform.minimaxi.com/")
+		guiPrint("")
+		if runningAsGUI && runtime.GOOS == "windows" {
+			ShowErrorDialog("MiniMax Studio - 缺少 API Key",
+				"未检测到 API Key。\n\n"+
+					"请设置系统环境变量 MINIMAX_API_KEY，\n"+
+					"或在终端中运行:\n\n"+
+					"  set MINIMAX_API_KEY=你的密钥\n"+
+					"  ms.exe --api-key 你的密钥\n\n"+
+					"获取地址: https://platform.minimaxi.com/")
+			return fmt.Errorf("API key not configured")
+		}
 	} else {
 		masked := apiKey
 		if len(apiKey) > 8 {
 			masked = apiKey[:4] + "****" + apiKey[len(apiKey)-4:]
 		}
-		fmt.Printf("  [✓] API Key: %s\n", masked)
+		guiPrint("  [✓] API Key: %s", masked)
 	}
 
 	// Check ffmpeg dependency
 	if err := checkFFmpeg(); err != nil {
-		fmt.Println()
-		fmt.Println("  [!] 未检测到 ffmpeg / ffprobe")
-		fmt.Println("      视频拼接和合成功能将不可用")
-		fmt.Println("      安装地址: https://ffmpeg.org/download.html")
-		fmt.Println()
+		guiPrint("")
+		guiPrint("  [!] 未检测到 ffmpeg / ffprobe")
+		guiPrint("      视频拼接和合成功能将不可用")
+		guiPrint("      安装地址: https://ffmpeg.org/download.html")
+		guiPrint("")
 	} else {
-		fmt.Println("  [✓] ffmpeg: 已就绪")
+		guiPrint("  [✓] ffmpeg: 已就绪")
 	}
 
 	// Use embedded frontend if available, otherwise try local dist
 	frontendDir := api.EmbeddedFrontendDir()
 	if frontendDir == "" {
-		fmt.Println("  [!] 前端资源未嵌入（将使用本地 frontend/dist）")
+		guiPrint("  [!] 前端资源未嵌入（将使用本地 frontend/dist）")
 	}
 
-	fmt.Println()
-	fmt.Printf("  正在启动服务器 -> %s\n", url)
-	fmt.Printf("  输出目录: %s\n", serverOutputDir)
-	fmt.Println()
-	fmt.Println("  按 Ctrl+C 停止服务器")
-	fmt.Println()
+	guiPrint("")
+	guiPrint("  正在启动服务器 -> %s", url)
+	guiPrint("  输出目录: %s", outputDir)
+	guiPrint("")
+	guiPrint("  按 Ctrl+C 停止服务器")
+	guiPrint("")
 
 	// Auto-open browser
 	if serverOpenBrowser {
 		go openBrowser(url)
 	}
 
-	s := api.NewServer(serverOutputDir, apiKey, frontendDir)
+	s := api.NewServer(outputDir, apiKey, frontendDir)
 
 	return s.Run(addr)
 }
@@ -108,7 +170,7 @@ func openBrowser(url string) {
 	case "darwin":
 		cmd = exec.Command("open", url)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
+		cmd = exec.Command("cmd", "/c", "start", "", url)
 	default: // linux, freebsd, etc.
 		cmd = exec.Command("xdg-open", url)
 	}
