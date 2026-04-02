@@ -1,0 +1,29 @@
+/* Reset & base */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(56, 217, 169, 0.07), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 85% 5%, rgba(252, 196, 25, 0.05), transparent 45%),
+    linear-gradient(175deg, #0c1526 0%, #050b14 100%);
+  min-height: 100%;
+}
+
+body {
+  margin: 0; min-width: 320px; color: var(--text);
+  font-family: -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC",
+    "Segoe UI", system-ui, sans-serif;
+  font-size: 14px; line-height: 1.5;
+  background: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, textarea, select { font: inherit; letter-spacing: inherit; }
+button { cursor: pointer; border: none; background: none; color: inherit; }
+a { color: var(--accent); text-decoration: none; transition: opacity 180ms var(--ease-out); }
+a:hover { opacity: 0.82; }
+#root { min-height: 100vh; }

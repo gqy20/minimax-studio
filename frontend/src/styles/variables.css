@@ -1,0 +1,64 @@
+/* ══════════════════════════════════════════════
+   Design Tokens
+   ══════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Background layers ── */
+  --bg-deep: #050b14;
+  --bg: #0a1120;
+  --bg-soft: #0f1829;
+  --bg-elevated: #151f33;
+
+  /* ── Panel surfaces (subtly tinted per role) ── */
+  --panel: rgba(10, 17, 32, 0.94);
+  --panel-form: rgba(6, 16, 32, 0.96);
+  --panel-job: rgba(14, 18, 30, 0.96);
+  --panel-quota: rgba(20, 14, 28, 0.96);
+
+  /* ── Borders ── */
+  --line: rgba(130, 160, 200, 0.09);
+  --line-strong: rgba(130, 160, 200, 0.22);
+  --line-focus: rgba(79, 209, 197, 0.55);
+
+  /* ── Text hierarchy ── */
+  --text: #e4ebf5;
+  --text-secondary: #94aabb;
+  --text-muted: #5a7090;
+
+  /* ── Semantic palette ── */
+  --accent: #38d9a9;
+  --accent-soft: rgba(56, 217, 169, 0.12);
+  --accent-strong: rgba(56, 217, 169, 0.28);
+  --accent-glow: rgba(56, 217, 169, 0.08);
+
+  --warm: #fcc419;
+  --warm-soft: rgba(252, 196, 25, 0.11);
+  --warm-strong: rgba(252, 196, 25, 0.25);
+
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.12);
+  --danger-strong: rgba(255, 107, 107, 0.25);
+
+  --success: #51cf66;
+  --success-soft: rgba(81, 207, 102, 0.12);
+  --success-strong: rgba(81, 207, 102, 0.25);
+
+  /* ── Shadows & depth ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.36);
+  --inset-glow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+
+  /* ── Radius (reduced — shape contrast) ── */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* ── Transitions ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}

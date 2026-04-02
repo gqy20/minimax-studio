@@ -9,6 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Type aliases for convenient importing from handlers package.
+type GinCtx = *gin.Context
+type H = gin.H
+
 // RegisterFrontend serves the SPA frontend from the given directory.
 // If the directory is empty or doesn't exist, returns a helpful JSON error.
 // API routes take priority; everything else falls through to the SPA.

@@ -1,0 +1,35 @@
+/* Shell layout */
+
+.app-shell {
+  width: min(1440px, calc(100vw - 28px));
+  margin: 0 auto; padding: 20px 0 36px;
+}
+
+/* Top bar */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px 22px; }
+
+.topbar-brand { display: flex; flex-direction: column; gap: 2px; }
+.topbar-brand h1 {
+  margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2;
+  display: flex; align-items: center; gap: 8px;
+}
+.topbar-brand h1 .brand-icon {
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--accent), #20c997);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px; color: #042818; font-weight: 800; flex-shrink: 0;
+}
+.topbar-brand span {
+  margin: 0; color: var(--text-muted); font-size: 0.78rem; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.14em; padding-left: 34px;
+}
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Workspace grid */
+.workspace {
+  display: grid; grid-template-columns: 340px 1fr 280px; gap: 16px; align-items: start;
+}
+
+.form-panel { background: var(--panel-form); border-color: rgba(80, 140, 200, 0.08); }
+.status-panel { background: var(--panel-job); border-color: rgba(120, 140, 180, 0.08); }
+.quota-panel { background: var(--panel-quota); border-color: rgba(160, 120, 180, 0.08); }
