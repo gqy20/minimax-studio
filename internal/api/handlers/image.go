@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"os"
 
@@ -23,7 +24,7 @@ func (s *Server) HandleImage(c *gin.Context) {
 	s.createJob(jobID, "image", req)
 
 	go func() {
-		ctx := c.Request.Context()
+		ctx := context.Background()
 		s.appendJobLog(jobID, "generating image...")
 
 		imageData, _, err := s.client.GenerateImage(ctx, req.Prompt, defaultStr(req.AspectRatio, "16:9"), false)
