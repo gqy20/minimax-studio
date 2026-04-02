@@ -15,11 +15,11 @@ var (
 )
 
 const (
-	MB_ICONERROR    = 0x10
-	MB_ICONWARNING  = 0x30
-	MB_ICONINFO     = 0x40
-	MB_OK           = 0x0
-	SW_HIDE         = 0
+	MB_ICONERROR   = 0x10
+	MB_ICONWARNING = 0x30
+	MB_ICONINFO    = 0x40
+	MB_OK          = 0x0
+	SW_HIDE        = 0
 )
 
 // ShowErrorDialog displays a modal error dialog on Windows.

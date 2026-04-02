@@ -29,7 +29,7 @@ func (s *Server) HandleClip(c *gin.Context) {
 		opts := schemas.ClipOptions{
 			ImagePrompt:  req.Prompt,
 			VideoPrompt:  req.Subject,
-			AspectRatio: defaultStr(req.AspectRatio, "16:9"),
+			AspectRatio:  defaultStr(req.AspectRatio, "16:9"),
 			VideoModel:   defaultStr(req.Model, "MiniMax-Hailuo-2.3-Fast"),
 			Duration:     defaultInt(req.Duration, 5),
 			Resolution:   defaultStr(req.Resolution, "720p"),
