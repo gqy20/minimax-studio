@@ -8,12 +8,38 @@ type MakeRequest = {
   input_video: string;
 };
 
+type PlanRequest = {
+  theme: string;
+  scene_count: number;
+  scene_duration: number;
+  language: string;
+};
+
+type ClipRequest = {
+  prompt: string;
+  subject: string;
+  aspect_ratio: string;
+  duration: number;
+  resolution: string;
+};
+
 type MakeResult = {
   output_dir: string;
   plan_path: string;
   narration_path: string;
   music_path?: string;
   final_video_path: string;
+};
+
+type PlanResult = {
+  output_dir: string;
+  plan_path: string;
+  narration_path: string;
+};
+
+type ClipResult = {
+  image_path: string;
+  video_path: string;
 };
 
 type Job = {
@@ -23,7 +49,7 @@ type Job = {
   stage: string;
   created_at?: string;
   updated_at?: string;
-  output?: MakeResult;
+  output?: MakeResult | PlanResult | ClipResult;
   error?: string;
   logs?: Array<{
     time: string;
@@ -74,6 +100,23 @@ const DEFAULT_FORM: MakeRequest = {
   language: "zh",
   input_video: "",
 };
+
+const DEFAULT_PLAN_FORM: PlanRequest = {
+  theme: "清晨薄雾里的旧码头，一只纸船慢慢漂向远处灯塔",
+  scene_count: 3,
+  scene_duration: 6,
+  language: "zh",
+};
+
+const DEFAULT_CLIP_FORM: ClipRequest = {
+  prompt: "A paper boat on reflective water at dawn, cinematic soft light",
+  subject: "The paper boat drifts gently forward while the camera slowly pushes in",
+  aspect_ratio: "16:9",
+  duration: 5,
+  resolution: "720p",
+};
+
+type WorkflowMode = "make" | "plan" | "clip";
 
 function apiUrl(path: string) {
   if (!API_ROOT) {
@@ -155,7 +198,10 @@ function formatStatus(status: Job["status"]) {
 }
 
 export default function App() {
+  const [mode, setMode] = useState<WorkflowMode>("make");
   const [form, setForm] = useState<MakeRequest>(DEFAULT_FORM);
+  const [planForm, setPlanForm] = useState<PlanRequest>(DEFAULT_PLAN_FORM);
+  const [clipForm, setClipForm] = useState<ClipRequest>(DEFAULT_CLIP_FORM);
   const [job, setJob] = useState<Job | null>(null);
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [quota, setQuota] = useState<QuotaResult | null>(null);
@@ -171,6 +217,15 @@ export default function App() {
       return null;
     }
 
+    const output = job.output;
+    const planPath = output && "plan_path" in output ? output.plan_path : undefined;
+    const narrationPath =
+      output && "narration_path" in output ? output.narration_path : undefined;
+    const musicPath = output && "music_path" in output ? output.music_path : undefined;
+    const finalVideoPath =
+      output && "final_video_path" in output ? output.final_video_path : undefined;
+    const imagePath = output && "image_path" in output ? output.image_path : undefined;
+
     const fromArtifacts =
       job.artifacts?.reduce<Record<string, string>>((accumulator, artifact) => {
         accumulator[artifact.label] = toAssetUrl(job.job_id, artifact.path);
@@ -178,14 +233,14 @@ export default function App() {
       }, {}) ?? {};
 
     return {
-      plan: fromArtifacts.plan ?? toAssetUrl(job.job_id, job.output?.plan_path),
+      plan: fromArtifacts.plan ?? toAssetUrl(job.job_id, planPath),
       narration:
         fromArtifacts.narration ??
         fromArtifacts.voice ??
-        toAssetUrl(job.job_id, job.output?.narration_path),
-      music: fromArtifacts.music ?? toAssetUrl(job.job_id, job.output?.music_path),
-      finalVideo:
-        fromArtifacts.final_video ?? toAssetUrl(job.job_id, job.output?.final_video_path),
+        toAssetUrl(job.job_id, narrationPath),
+      music: fromArtifacts.music ?? toAssetUrl(job.job_id, musicPath),
+      finalVideo: fromArtifacts.final_video ?? fromArtifacts.video ?? toAssetUrl(job.job_id, finalVideoPath),
+      image: fromArtifacts.image ?? toAssetUrl(job.job_id, imagePath),
     };
   }, [job]);
 
@@ -325,6 +380,65 @@ export default function App() {
     }
   }
 
+  async function handlePlanSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+    setJobError("");
+
+    try {
+      const response = await requestJSON<{ job_id: string; status: string }>("/api/v1/plan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          theme: planForm.theme.trim(),
+          scene_count: planForm.scene_count,
+          scene_duration: planForm.scene_duration,
+          language: planForm.language,
+        }),
+      });
+
+      await fetchJob(response.job_id);
+      await fetchJobs();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "分镜任务提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleClipSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+    setJobError("");
+
+    try {
+      const response = await requestJSON<{ job_id: string; status: string }>("/api/v1/clip", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: clipForm.prompt.trim(),
+          subject: clipForm.subject.trim(),
+          aspect_ratio: clipForm.aspect_ratio,
+          duration: clipForm.duration,
+          resolution: clipForm.resolution,
+        }),
+      });
+
+      await fetchJob(response.job_id);
+      await fetchJobs();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "图生视频任务提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="hero">
@@ -356,100 +470,297 @@ export default function App() {
           <div className="panel-heading">
             <div>
               <p className="panel-kicker">Create</p>
-              <h2>Make Workflow</h2>
+              <h2>Workflow Launcher</h2>
             </div>
-            <span className="panel-note">端到端短片生成</span>
+            <span className="panel-note">多入口工作流</span>
           </div>
 
-          <form className="make-form" onSubmit={handleSubmit}>
-            <label className="field">
-              <span>主题</span>
-              <textarea
-                rows={5}
-                value={form.theme}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, theme: event.target.value }))
-                }
-                placeholder="输入一个适合生成短片的故事主题"
-                required
-              />
-            </label>
+          <div className="mode-switcher">
+            <button
+              type="button"
+              className={`mode-chip ${mode === "make" ? "active" : ""}`}
+              onClick={() => setMode("make")}
+            >
+              Make
+            </button>
+            <button
+              type="button"
+              className={`mode-chip ${mode === "plan" ? "active" : ""}`}
+              onClick={() => setMode("plan")}
+            >
+              Plan
+            </button>
+            <button
+              type="button"
+              className={`mode-chip ${mode === "clip" ? "active" : ""}`}
+              onClick={() => setMode("clip")}
+            >
+              Clip
+            </button>
+          </div>
 
-            <div className="field-grid">
+          {mode === "make" ? (
+            <form className="make-form" onSubmit={handleSubmit}>
               <label className="field">
-                <span>镜头数</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={form.scene_count}
+                <span>主题</span>
+                <textarea
+                  rows={5}
+                  value={form.theme}
                   onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      scene_count: Number(event.target.value),
-                    }))
+                    setForm((current) => ({ ...current, theme: event.target.value }))
                   }
+                  placeholder="输入一个适合生成短片的故事主题"
+                  required
                 />
               </label>
 
+              <div className="field-grid">
+                <label className="field">
+                  <span>镜头数</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={form.scene_count}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        scene_count: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span>单镜头时长</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={10}
+                    value={form.scene_duration}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        scene_duration: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span>语言</span>
+                  <select
+                    value={form.language}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, language: event.target.value }))
+                    }
+                  >
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                  </select>
+                </label>
+              </div>
+
               <label className="field">
-                <span>单镜头时长</span>
+                <span>复用已有视频</span>
                 <input
-                  type="number"
-                  min={3}
-                  max={10}
-                  value={form.scene_duration}
+                  type="text"
+                  value={form.input_video}
                   onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      scene_duration: Number(event.target.value),
-                    }))
+                    setForm((current) => ({ ...current, input_video: event.target.value }))
                   }
+                  placeholder="可选，本地服务端可访问的路径"
                 />
               </label>
 
-              <label className="field">
-                <span>语言</span>
-                <select
-                  value={form.language}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, language: event.target.value }))
-                  }
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "生成短片"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setForm(DEFAULT_FORM)}
+                  disabled={isSubmitting}
                 >
-                  <option value="zh">中文</option>
-                  <option value="en">English</option>
-                </select>
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {mode === "plan" ? (
+            <form className="make-form" onSubmit={handlePlanSubmit}>
+              <label className="field">
+                <span>主题</span>
+                <textarea
+                  rows={5}
+                  value={planForm.theme}
+                  onChange={(event) =>
+                    setPlanForm((current) => ({ ...current, theme: event.target.value }))
+                  }
+                  placeholder="先用 plan 快速验证故事结构和旁白"
+                  required
+                />
               </label>
-            </div>
 
-            <label className="field">
-              <span>复用已有视频</span>
-              <input
-                type="text"
-                value={form.input_video}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, input_video: event.target.value }))
-                }
-                placeholder="可选，本地服务端可访问的路径"
-              />
-            </label>
+              <div className="field-grid">
+                <label className="field">
+                  <span>镜头数</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={planForm.scene_count}
+                    onChange={(event) =>
+                      setPlanForm((current) => ({
+                        ...current,
+                        scene_count: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
 
-            {submitError ? <p className="error-banner">{submitError}</p> : null}
+                <label className="field">
+                  <span>单镜头时长</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={10}
+                    value={planForm.scene_duration}
+                    onChange={(event) =>
+                      setPlanForm((current) => ({
+                        ...current,
+                        scene_duration: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
 
-            <div className="form-actions">
-              <button type="submit" className="primary-button" disabled={isSubmitting}>
-                {isSubmitting ? "提交中..." : "生成短片"}
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={() => setForm(DEFAULT_FORM)}
-                disabled={isSubmitting}
-              >
-                重置
-              </button>
-            </div>
-          </form>
+                <label className="field">
+                  <span>语言</span>
+                  <select
+                    value={planForm.language}
+                    onChange={(event) =>
+                      setPlanForm((current) => ({ ...current, language: event.target.value }))
+                    }
+                  >
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                  </select>
+                </label>
+              </div>
+
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "生成分镜规划"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setPlanForm(DEFAULT_PLAN_FORM)}
+                  disabled={isSubmitting}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {mode === "clip" ? (
+            <form className="make-form" onSubmit={handleClipSubmit}>
+              <label className="field">
+                <span>首帧提示词</span>
+                <textarea
+                  rows={4}
+                  value={clipForm.prompt}
+                  onChange={(event) =>
+                    setClipForm((current) => ({ ...current, prompt: event.target.value }))
+                  }
+                  placeholder="用于生成首帧图像"
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>视频运动提示词</span>
+                <textarea
+                  rows={4}
+                  value={clipForm.subject}
+                  onChange={(event) =>
+                    setClipForm((current) => ({ ...current, subject: event.target.value }))
+                  }
+                  placeholder="描述镜头运动和主体行为"
+                  required
+                />
+              </label>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>画幅</span>
+                  <select
+                    value={clipForm.aspect_ratio}
+                    onChange={(event) =>
+                      setClipForm((current) => ({ ...current, aspect_ratio: event.target.value }))
+                    }
+                  >
+                    <option value="16:9">16:9</option>
+                    <option value="9:16">9:16</option>
+                    <option value="1:1">1:1</option>
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>时长</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={10}
+                    value={clipForm.duration}
+                    onChange={(event) =>
+                      setClipForm((current) => ({
+                        ...current,
+                        duration: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span>分辨率</span>
+                  <select
+                    value={clipForm.resolution}
+                    onChange={(event) =>
+                      setClipForm((current) => ({ ...current, resolution: event.target.value }))
+                    }
+                  >
+                    <option value="720p">720p</option>
+                    <option value="1080p">1080p</option>
+                  </select>
+                </label>
+              </div>
+
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "生成单镜头"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setClipForm(DEFAULT_CLIP_FORM)}
+                  disabled={isSubmitting}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
 
           <div className="history-block">
             <div className="history-header">
@@ -556,9 +867,21 @@ export default function App() {
 
               {artifacts ? (
                 <div className="artifact-grid">
+                  {artifacts.image ? (
+                    <article className="artifact-card">
+                      <div className="artifact-header">
+                        <h3>Key Frame</h3>
+                        <a href={artifacts.image} target="_blank" rel="noreferrer">
+                          查看原图
+                        </a>
+                      </div>
+                      <img className="image-frame" src={artifacts.image} alt="Generated key frame" />
+                    </article>
+                  ) : null}
+
                   <article className="artifact-card feature-card">
                     <div className="artifact-header">
-                      <h3>Final Video</h3>
+                      <h3>{artifacts.image && !artifacts.plan ? "Clip Video" : "Final Video"}</h3>
                       {artifacts.finalVideo ? (
                         <a href={artifacts.finalVideo} target="_blank" rel="noreferrer">
                           新窗口打开

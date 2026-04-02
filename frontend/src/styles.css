@@ -168,6 +168,27 @@ a {
   gap: 16px;
 }
 
+.mode-switcher {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.mode-chip {
+  border: 1px solid var(--line);
+  background: rgba(152, 173, 199, 0.08);
+  color: var(--muted);
+  padding: 11px 16px;
+  border-radius: 999px;
+}
+
+.mode-chip.active {
+  color: var(--text);
+  background: rgba(99, 230, 190, 0.16);
+  border-color: rgba(99, 230, 190, 0.3);
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -406,7 +427,8 @@ a {
 }
 
 .media-frame,
-.audio-frame {
+.audio-frame,
+.image-frame {
   width: 100%;
   margin-top: 12px;
 }
@@ -415,6 +437,14 @@ a {
   border-radius: 18px;
   background: #000;
   aspect-ratio: 16 / 9;
+}
+
+.image-frame {
+  display: block;
+  border-radius: 18px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .plan-summary {
