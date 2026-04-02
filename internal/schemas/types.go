@@ -41,6 +41,11 @@ type ClipResult struct {
 	DownloadURL string `json:"download_url"`
 }
 
+// ImageResult 单图生成结果
+type ImageResult struct {
+	ImagePath string `json:"image_path"`
+}
+
 // PlanOptions 分镜规划选项
 type PlanOptions struct {
 	Theme         string `json:"theme"`

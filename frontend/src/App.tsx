@@ -1,307 +1,53 @@
-import { Component, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type MakeRequest = {
-  theme: string;
-  scene_count: number;
-  scene_duration: number;
-  language: string;
-  input_video: string;
-};
-
-type PlanRequest = {
-  theme: string;
-  scene_count: number;
-  scene_duration: number;
-  language: string;
-};
-
-type ClipRequest = {
-  prompt: string;
-  subject: string;
-  aspect_ratio: string;
-  duration: number;
-  resolution: string;
-};
-
-type VoiceRequest = {
-  text: string;
-  voice_id: string;
-  audio_format: string;
-};
-
-type MusicRequest = {
-  prompt: string;
-  audio_format: string;
-};
-
-type StitchRequest = {
-  videos: string;
-  narration: string;
-  music: string;
-};
-
-type MakeResult = {
-  output_dir: string;
-  plan_path: string;
-  narration_path: string;
-  music_path?: string;
-  final_video_path: string;
-};
-
-type PlanResult = {
-  output_dir: string;
-  plan_path: string;
-  narration_path: string;
-};
-
-type ClipResult = {
-  image_path: string;
-  video_path: string;
-};
-
-type VoiceResult = {
-  output_path: string;
-};
-
-type MusicResult = {
-  output_path: string;
-};
-
-type StitchResult = {
-  stitched_video_path: string;
-  padded_video_path: string;
-  final_video_path: string;
-};
-
-type Job = {
-  job_id: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  progress: number;
-  stage: string;
-  created_at?: string;
-  updated_at?: string;
-  output?: MakeResult | PlanResult | ClipResult | VoiceResult | MusicResult | StitchResult;
-  error?: string;
-  logs?: Array<{
-    time: string;
-    message: string;
-  }>;
-  artifacts?: Array<{
-    label: string;
-    kind: string;
-    path: string;
-  }>;
-};
-
-type JobListResult = {
-  jobs: Job[];
-};
-
-type QuotaEntry = {
-  model_name: string;
-  current_interval_total_count: number;
-  current_interval_usage_count: number;
-  current_weekly_total_count: number;
-  current_weekly_usage_count: number;
-};
-
-type QuotaResult = QuotaEntry[] | { entries: QuotaEntry[] };
-
-type PlanData = {
-  title: string;
-  visual_style: string;
-  narration: string;
-  music_prompt: string;
-  scenes: Array<{
-    name: string;
-    image_prompt: string;
-    video_prompt: string;
-  }>;
-};
-
-const API_ROOT = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
-const HISTORY_STORAGE_KEY = "minimax-studio.job-history";
-
-const DEFAULT_FORM: MakeRequest = {
-  theme: "一只纸船在凌晨海面漂流，最终进入发光的城市河道",
-  scene_count: 1,
-  scene_duration: 6,
-  language: "zh",
-  input_video: "",
-};
-
-const DEFAULT_PLAN_FORM: PlanRequest = {
-  theme: "清晨薄雾里的旧码头，一只纸船慢慢漂向远处灯塔",
-  scene_count: 3,
-  scene_duration: 6,
-  language: "zh",
-};
-
-const DEFAULT_CLIP_FORM: ClipRequest = {
-  prompt: "A paper boat on reflective water at dawn, cinematic soft light",
-  subject: "The paper boat drifts gently forward while the camera slowly pushes in",
-  aspect_ratio: "16:9",
-  duration: 5,
-  resolution: "720p",
-};
-
-const DEFAULT_VOICE_FORM: VoiceRequest = {
-  text: "海风从旧码头吹过，纸船沿着微光漂向远方。",
-  voice_id: "male-qn-qingse",
-  audio_format: "mp3",
-};
-
-const DEFAULT_MUSIC_FORM: MusicRequest = {
-  prompt: "warm cinematic piano with soft ambient texture, no vocals",
-  audio_format: "mp3",
-};
-
-const DEFAULT_STITCH_FORM: StitchRequest = {
-  videos: "",
-  narration: "",
-  music: "",
-};
-
-type WorkflowMode = "make" | "plan" | "clip" | "voice" | "music" | "stitch";
-
-function apiUrl(path: string) {
-  if (!API_ROOT) {
-    return path;
-  }
-
-  if (API_ROOT.endsWith("/api/v1") && path.startsWith("/api/v1")) {
-    return `${API_ROOT}${path.slice("/api/v1".length)}`;
-  }
-
-  return `${API_ROOT}${path}`;
-}
-
-async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), init);
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const message =
-      typeof data?.error === "string"
-        ? data.error
-        : `Request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  return data as T;
-}
-
-function loadHistory() {
-  const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
-  if (!raw) {
-    return [] as string[];
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveHistory(items: string[]) {
-  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, 8)));
-}
-
-function toAssetUrl(jobID: string, filePath?: string) {
-  if (!filePath) {
-    return "";
-  }
-
-  const normalized = filePath.replaceAll("\\", "/");
-  const fileName = normalized.split("/").filter(Boolean).pop();
-  if (!fileName) {
-    return "";
-  }
-
-  return apiUrl(`/api/v1/output/${jobID}/${encodeURIComponent(fileName)}`);
-}
-
-function usagePercent(used: number, total: number) {
-  if (!total) {
-    return 0;
-  }
-  return Math.min(100, Math.round((used / total) * 100));
-}
-
-function remainingCount(total: number, used: number) {
-  return Math.max(0, total - used);
-}
-
-function isTextWindowQuota(modelName: string) {
-  return /m2/i.test(modelName);
-}
-
-function normalizeQuotaEntries(input: QuotaResult | null) {
-  if (!input) {
-    return [] as QuotaEntry[];
-  }
-
-  if (Array.isArray(input)) {
-    return input;
-  }
-
-  return Array.isArray(input.entries) ? input.entries : [];
-}
-
-function formatStatus(status: Job["status"]) {
-  switch (status) {
-    case "completed":
-      return "已完成";
-    case "failed":
-      return "失败";
-    case "pending":
-      return "等待中";
-    default:
-      return "处理中";
-  }
-}
-
-type ErrorBoundaryProps = {
-  children: ReactNode;
-};
-
-type ErrorBoundaryState = {
-  hasError: boolean;
-};
-
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: unknown) {
-    console.error("MiniMax Studio render error", error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="app-shell">
-          <div className="panel">
-            <p className="error-banner">页面渲染失败，请刷新或重启前端。</p>
-          </div>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
-}
+import {
+  DEFAULT_CLIP_FORM,
+  DEFAULT_FORM,
+  DEFAULT_IMAGE_FORM,
+  DEFAULT_MUSIC_FORM,
+  DEFAULT_PLAN_FORM,
+  DEFAULT_STITCH_FORM,
+  DEFAULT_VOICE_FORM,
+  VOICE_OPTIONS,
+} from "./app-data";
+import type {
+  ClipRequest,
+  ImageRequest,
+  Job,
+  JobListResult,
+  MakeRequest,
+  MusicRequest,
+  PlanData,
+  PlanRequest,
+  QuotaResult,
+  ResultTab,
+  StitchRequest,
+  VoiceRequest,
+  WorkflowMode,
+} from "./app-types";
+import {
+  ErrorBoundary,
+  formatStatus,
+  isTextWindowQuota,
+  loadHistory,
+  modeHint,
+  modeLabel,
+  normalizeQuotaEntries,
+  remainingCount,
+  requestJSON,
+  saveHistory,
+  shortJobID,
+  toAssetUrl,
+  usagePercent,
+} from "./app-utils";
 
 export default function App() {
   const [mode, setMode] = useState<WorkflowMode>("make");
+  const [resultTab, setResultTab] = useState<ResultTab>("result");
   const [form, setForm] = useState<MakeRequest>(DEFAULT_FORM);
   const [planForm, setPlanForm] = useState<PlanRequest>(DEFAULT_PLAN_FORM);
   const [clipForm, setClipForm] = useState<ClipRequest>(DEFAULT_CLIP_FORM);
+  const [imageForm, setImageForm] = useState<ImageRequest>(DEFAULT_IMAGE_FORM);
   const [voiceForm, setVoiceForm] = useState<VoiceRequest>(DEFAULT_VOICE_FORM);
   const [musicForm, setMusicForm] = useState<MusicRequest>(DEFAULT_MUSIC_FORM);
   const [stitchForm, setStitchForm] = useState<StitchRequest>(DEFAULT_STITCH_FORM);
@@ -410,6 +156,17 @@ export default function App() {
         setPlan(null);
       });
   }, [artifacts?.plan, job]);
+
+  useEffect(() => {
+    if (!job) {
+      setResultTab("result");
+      return;
+    }
+
+    if (job.logs?.length) {
+      setResultTab("result");
+    }
+  }, [job?.job_id]);
 
   async function fetchQuota() {
     setIsQuotaLoading(true);
@@ -593,6 +350,33 @@ export default function App() {
     }
   }
 
+  async function handleImageSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+    setJobError("");
+
+    try {
+      const response = await requestJSON<{ job_id: string; status: string }>("/api/v1/image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: imageForm.prompt.trim(),
+          aspect_ratio: imageForm.aspect_ratio,
+        }),
+      });
+
+      await fetchJob(response.job_id);
+      await fetchJobs();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "图片任务提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleMusicSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
@@ -656,9 +440,10 @@ export default function App() {
   return (
     <ErrorBoundary>
     <div className="app-shell">
-      <header className="hero">
-        <div className="hero-copy">
+      <header className="topbar">
+        <div className="topbar-copy">
           <h1>MiniMax Studio</h1>
+          <span>workbench</span>
         </div>
       </header>
 
@@ -668,8 +453,10 @@ export default function App() {
             <div>
               <h2>Run</h2>
             </div>
-            <span className="panel-note">{mode}</span>
+            <span className="panel-note">{modeLabel(mode)}</span>
           </div>
+
+          <p className="mode-hint">{modeHint(mode)}</p>
 
           <div className="mode-switcher">
             <button
@@ -695,6 +482,13 @@ export default function App() {
             </button>
             <button
               type="button"
+              className={`mode-chip ${mode === "image" ? "active" : ""}`}
+              onClick={() => setMode("image")}
+            >
+              Image
+            </button>
+            <button
+              type="button"
               className={`mode-chip ${mode === "voice" ? "active" : ""}`}
               onClick={() => setMode("voice")}
             >
@@ -717,11 +511,11 @@ export default function App() {
           </div>
 
           {mode === "make" ? (
-            <form className="make-form" onSubmit={handleSubmit}>
+            <form className="make-form compact-form" onSubmit={handleSubmit}>
               <label className="field">
                 <span>主题</span>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={form.theme}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, theme: event.target.value }))
@@ -809,11 +603,11 @@ export default function App() {
           ) : null}
 
           {mode === "plan" ? (
-            <form className="make-form" onSubmit={handlePlanSubmit}>
+            <form className="make-form compact-form" onSubmit={handlePlanSubmit}>
               <label className="field">
                 <span>主题</span>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={planForm.theme}
                   onChange={(event) =>
                     setPlanForm((current) => ({ ...current, theme: event.target.value }))
@@ -889,11 +683,11 @@ export default function App() {
           ) : null}
 
           {mode === "clip" ? (
-            <form className="make-form" onSubmit={handleClipSubmit}>
+            <form className="make-form compact-form" onSubmit={handleClipSubmit}>
               <label className="field">
                 <span>首帧提示词</span>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={clipForm.prompt}
                   onChange={(event) =>
                     setClipForm((current) => ({ ...current, prompt: event.target.value }))
@@ -906,7 +700,7 @@ export default function App() {
               <label className="field">
                 <span>视频运动提示词</span>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={clipForm.subject}
                   onChange={(event) =>
                     setClipForm((current) => ({ ...current, subject: event.target.value }))
@@ -979,12 +773,59 @@ export default function App() {
             </form>
           ) : null}
 
+          {mode === "image" ? (
+            <form className="make-form compact-form" onSubmit={handleImageSubmit}>
+              <label className="field">
+                <span>图片提示词</span>
+                <textarea
+                  rows={4}
+                  value={imageForm.prompt}
+                  onChange={(event) =>
+                    setImageForm((current) => ({ ...current, prompt: event.target.value }))
+                  }
+                  placeholder="输入单图生成提示词"
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>画幅</span>
+                <select
+                  value={imageForm.aspect_ratio}
+                  onChange={(event) =>
+                    setImageForm((current) => ({ ...current, aspect_ratio: event.target.value }))
+                  }
+                >
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                </select>
+              </label>
+
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "生成图片"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setImageForm(DEFAULT_IMAGE_FORM)}
+                  disabled={isSubmitting}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
+
           {mode === "voice" ? (
-            <form className="make-form" onSubmit={handleVoiceSubmit}>
+            <form className="make-form compact-form" onSubmit={handleVoiceSubmit}>
               <label className="field">
                 <span>旁白文本</span>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={voiceForm.text}
                   onChange={(event) =>
                     setVoiceForm((current) => ({ ...current, text: event.target.value }))
@@ -996,13 +837,18 @@ export default function App() {
               <div className="field-grid">
                 <label className="field">
                   <span>音色</span>
-                  <input
-                    type="text"
+                  <select
                     value={voiceForm.voice_id}
                     onChange={(event) =>
                       setVoiceForm((current) => ({ ...current, voice_id: event.target.value }))
                     }
-                  />
+                  >
+                    {VOICE_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="field">
                   <span>格式</span>
@@ -1037,11 +883,11 @@ export default function App() {
           ) : null}
 
           {mode === "music" ? (
-            <form className="make-form" onSubmit={handleMusicSubmit}>
+            <form className="make-form compact-form" onSubmit={handleMusicSubmit}>
               <label className="field">
                 <span>音乐提示词</span>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={musicForm.prompt}
                   onChange={(event) =>
                     setMusicForm((current) => ({ ...current, prompt: event.target.value }))
@@ -1082,11 +928,11 @@ export default function App() {
           ) : null}
 
           {mode === "stitch" ? (
-            <form className="make-form" onSubmit={handleStitchSubmit}>
+            <form className="make-form compact-form" onSubmit={handleStitchSubmit}>
               <label className="field">
                 <span>视频路径列表</span>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={stitchForm.videos}
                   onChange={(event) =>
                     setStitchForm((current) => ({ ...current, videos: event.target.value }))
@@ -1150,11 +996,11 @@ export default function App() {
                 recentJobs.map((item) => (
                   <button
                     key={item.job_id}
-                    className="history-chip"
+                    className={`history-chip ${job?.job_id === item.job_id ? "active" : ""}`}
                     type="button"
                     onClick={() => void fetchJob(item.job_id)}
                   >
-                    <span>{item.job_id}</span>
+                    <span>{shortJobID(item.job_id)}</span>
                     <small>{formatStatus(item.status)}</small>
                   </button>
                 ))
@@ -1173,19 +1019,10 @@ export default function App() {
 
           {job ? (
             <div className="job-stack">
-              <div className="job-meta">
-                <div>
-                  <span className="meta-label">Job ID</span>
-                  <strong>{job.job_id}</strong>
-                </div>
-                <div>
-                  <span className="meta-label">Stage</span>
-                  <strong>{job.stage || "make"}</strong>
-                </div>
-                <div>
-                  <span className="meta-label">Progress</span>
-                  <strong>{Math.round((job.progress || 0) * 100)}%</strong>
-                </div>
+              <div className="job-strip">
+                <span className="job-pill">{shortJobID(job.job_id)}</span>
+                <span className="job-pill">{job.stage || "job"}</span>
+                <span className="job-pill">{Math.round((job.progress || 0) * 100)}%</span>
               </div>
 
               <div className="progress-rail" aria-hidden="true">
@@ -1221,116 +1058,160 @@ export default function App() {
                 ) : null}
               </div>
 
-              {job.logs?.length ? (
-                  <div className="log-panel">
-                    <div className="artifact-header">
-                    <h3>Logs</h3>
-                    <span>{job.logs.length}</span>
-                  </div>
-                  <div className="log-list">
-                    {job.logs.slice().reverse().map((entry, index) => (
-                      <div className="log-row" key={`${entry.time}-${index}`}>
-                        <span>{new Date(entry.time).toLocaleString()}</span>
-                        <p>{entry.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
               {artifacts ? (
-                <div className="artifact-grid">
-                  {artifacts.image ? (
-                    <article className="artifact-card">
+                <div className="result-shell">
+                  <div className="result-tabs">
+                    <button
+                      type="button"
+                      className={`result-tab ${resultTab === "result" ? "active" : ""}`}
+                      onClick={() => setResultTab("result")}
+                    >
+                      Result
+                    </button>
+                    <button
+                      type="button"
+                      className={`result-tab ${resultTab === "plan" ? "active" : ""}`}
+                      onClick={() => setResultTab("plan")}
+                      disabled={!artifacts.plan}
+                    >
+                      Plan
+                    </button>
+                    <button
+                      type="button"
+                      className={`result-tab ${resultTab === "logs" ? "active" : ""}`}
+                      onClick={() => setResultTab("logs")}
+                      disabled={!job.logs?.length}
+                    >
+                      Logs
+                    </button>
+                  </div>
+
+                  {resultTab === "result" ? (
+                    <div className="result-grid">
+                      <article className="artifact-card feature-card">
+                        <div className="artifact-header">
+                          <h3>
+                            {artifacts.finalVideo
+                              ? artifacts.image && !artifacts.plan
+                                ? "Video"
+                                : "Final"
+                              : "Image"}
+                          </h3>
+                          {artifacts.finalVideo ? (
+                            <a href={artifacts.finalVideo} target="_blank" rel="noreferrer">
+                              打开
+                            </a>
+                          ) : artifacts.image ? (
+                            <a href={artifacts.image} target="_blank" rel="noreferrer">
+                              打开
+                            </a>
+                          ) : null}
+                        </div>
+                        {artifacts.finalVideo ? (
+                          <video controls className="media-frame" src={artifacts.finalVideo} />
+                        ) : artifacts.image ? (
+                          <img className="image-frame hero-image" src={artifacts.image} alt="Generated result" />
+                        ) : (
+                          <p className="muted-text">等待中</p>
+                        )}
+                      </article>
+
+                      {artifacts.image && artifacts.finalVideo ? (
+                        <article className="artifact-card compact-card">
+                          <div className="artifact-header">
+                            <h3>Frame</h3>
+                            <a href={artifacts.image} target="_blank" rel="noreferrer">
+                              打开
+                            </a>
+                          </div>
+                          <img className="image-frame" src={artifacts.image} alt="Generated key frame" />
+                        </article>
+                      ) : null}
+
+                      <article className="artifact-card compact-card">
+                        <div className="artifact-header">
+                          <h3>Narration</h3>
+                          {artifacts.narration ? (
+                            <a href={artifacts.narration} target="_blank" rel="noreferrer">
+                              打开
+                            </a>
+                          ) : null}
+                        </div>
+                        {artifacts.narration ? (
+                          <audio controls className="audio-frame" src={artifacts.narration} />
+                        ) : (
+                          <p className="muted-text">无</p>
+                        )}
+                      </article>
+
+                      <article className="artifact-card compact-card">
+                        <div className="artifact-header">
+                          <h3>Music</h3>
+                          {artifacts.music ? (
+                            <a href={artifacts.music} target="_blank" rel="noreferrer">
+                              打开
+                            </a>
+                          ) : null}
+                        </div>
+                        {artifacts.music ? (
+                          <audio controls className="audio-frame" src={artifacts.music} />
+                        ) : (
+                          <p className="muted-text">无</p>
+                        )}
+                      </article>
+                    </div>
+                  ) : null}
+
+                  {resultTab === "plan" ? (
+                    <article className="artifact-card plan-card solo-card">
                       <div className="artifact-header">
-                        <h3>Frame</h3>
-                        <a href={artifacts.image} target="_blank" rel="noreferrer">
-                          打开
-                        </a>
+                        <h3>Plan</h3>
+                        {artifacts.plan ? (
+                          <a href={artifacts.plan} target="_blank" rel="noreferrer">
+                            打开
+                          </a>
+                        ) : null}
                       </div>
-                      <img className="image-frame" src={artifacts.image} alt="Generated key frame" />
+                      {plan ? (
+                        <div className="plan-stack">
+                          <div className="plan-summary">
+                            <strong>{plan.title || "未命名计划"}</strong>
+                            <p>{plan.visual_style}</p>
+                          </div>
+                          <div className="scene-list">
+                            {plan.scenes.map((scene, index) => (
+                              <div className="scene-card" key={`${scene.name}-${index}`}>
+                                <span className="scene-index">{String(index + 1).padStart(2, "0")}</span>
+                                <div>
+                                  <strong>{scene.name}</strong>
+                                  <p>{scene.video_prompt}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="muted-text">无</p>
+                      )}
                     </article>
                   ) : null}
 
-                  <article className="artifact-card feature-card">
-                    <div className="artifact-header">
-                      <h3>{artifacts.image && !artifacts.plan ? "Video" : "Final"}</h3>
-                      {artifacts.finalVideo ? (
-                        <a href={artifacts.finalVideo} target="_blank" rel="noreferrer">
-                          打开
-                        </a>
-                      ) : null}
-                    </div>
-                    {artifacts.finalVideo ? (
-                      <video controls className="media-frame" src={artifacts.finalVideo} />
-                    ) : (
-                      <p className="muted-text">等待产物生成。</p>
-                    )}
-                  </article>
-
-                  <article className="artifact-card">
-                    <div className="artifact-header">
-                      <h3>Narration</h3>
-                      {artifacts.narration ? (
-                        <a href={artifacts.narration} target="_blank" rel="noreferrer">
-                          打开
-                        </a>
-                      ) : null}
-                    </div>
-                    {artifacts.narration ? (
-                      <audio controls className="audio-frame" src={artifacts.narration} />
-                    ) : (
-                      <p className="muted-text">暂无旁白文件。</p>
-                    )}
-                  </article>
-
-                  <article className="artifact-card">
-                    <div className="artifact-header">
-                      <h3>Music</h3>
-                      {artifacts.music ? (
-                        <a href={artifacts.music} target="_blank" rel="noreferrer">
-                          打开
-                        </a>
-                      ) : null}
-                    </div>
-                    {artifacts.music ? (
-                      <audio controls className="audio-frame" src={artifacts.music} />
-                    ) : (
-                      <p className="muted-text">无</p>
-                    )}
-                  </article>
-
-                  <article className="artifact-card plan-card">
-                    <div className="artifact-header">
-                      <h3>Plan</h3>
-                      {artifacts.plan ? (
-                        <a href={artifacts.plan} target="_blank" rel="noreferrer">
-                          打开
-                        </a>
-                      ) : null}
-                    </div>
-                    {plan ? (
-                      <div className="plan-stack">
-                        <div className="plan-summary">
-                          <strong>{plan.title || "未命名计划"}</strong>
-                          <p>{plan.visual_style}</p>
-                        </div>
-                        <div className="scene-list">
-                          {plan.scenes.map((scene, index) => (
-                            <div className="scene-card" key={`${scene.name}-${index}`}>
-                              <span className="scene-index">{String(index + 1).padStart(2, "0")}</span>
-                              <div>
-                                <strong>{scene.name}</strong>
-                                <p>{scene.video_prompt}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                  {resultTab === "logs" ? (
+                    <div className="log-panel solo-card">
+                      <div className="artifact-header">
+                        <h3>Logs</h3>
+                        <span>{job.logs?.length ?? 0}</span>
                       </div>
-                    ) : (
-                      <p className="muted-text">无</p>
-                    )}
-                  </article>
+                      <div className="log-list">
+                        {job.logs?.slice().reverse().map((entry, index) => (
+                          <div className="log-row" key={`${entry.time}-${index}`}>
+                            <span>{new Date(entry.time).toLocaleString()}</span>
+                            <p>{entry.message}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="empty-state">

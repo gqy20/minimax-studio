@@ -58,48 +58,37 @@ a {
 .app-shell {
   width: min(1400px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 28px 0 40px;
+  padding: 18px 0 32px;
 }
 
-.hero {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 24px;
-  padding: 24px 8px 28px;
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 18px;
 }
 
-.hero-copy h1 {
-  margin: 8px 0 14px;
-  font-size: clamp(2.4rem, 5vw, 4.6rem);
-  line-height: 0.95;
-  letter-spacing: -0.05em;
-  max-width: 12ch;
+.topbar-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
 }
 
-.eyebrow,
-.panel-kicker {
+.topbar-copy h1 {
   margin: 0;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.78rem;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 
-.hero-text {
+.topbar-copy span {
   margin: 0;
-  max-width: 58ch;
   color: var(--muted);
-  line-height: 1.7;
-  font-size: 1rem;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
 
-.hero-metrics {
-  display: grid;
-  gap: 14px;
-  align-content: end;
-}
-
-.metric-card,
 .panel,
 .quota-card,
 .artifact-card {
@@ -107,23 +96,6 @@ a {
   background: var(--panel);
   box-shadow: var(--shadow);
   backdrop-filter: blur(20px);
-}
-
-.metric-card {
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-}
-
-.metric-card span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.metric-card strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 1.05rem;
 }
 
 .workspace {
@@ -149,7 +121,7 @@ a {
 .panel-heading h2,
 .history-header h3,
 .artifact-header h3 {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 1.2rem;
 }
 
@@ -168,10 +140,20 @@ a {
   gap: 16px;
 }
 
+.compact-form {
+  align-content: start;
+}
+
+.mode-hint {
+  margin: -8px 0 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .mode-switcher {
   display: flex;
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 8px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
@@ -179,7 +161,7 @@ a {
   border: 1px solid var(--line);
   background: rgba(152, 173, 199, 0.08);
   color: var(--muted);
-  padding: 11px 16px;
+  padding: 9px 14px;
   border-radius: 999px;
 }
 
@@ -191,11 +173,12 @@ a {
 
 .field {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .field span {
-  font-size: 0.92rem;
+  font-size: 0.84rem;
+  color: var(--muted);
 }
 
 .field textarea,
@@ -206,7 +189,7 @@ a {
   border-radius: 16px;
   background: rgba(8, 14, 26, 0.7);
   color: var(--text);
-  padding: 14px 16px;
+  padding: 12px 14px;
   outline: none;
   transition: border-color 180ms ease, transform 180ms ease;
 }
@@ -225,7 +208,7 @@ a {
 .field-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .form-actions,
@@ -261,7 +244,7 @@ a {
 }
 
 .primary-button {
-  padding: 13px 20px;
+  padding: 12px 18px;
   background: linear-gradient(135deg, var(--accent) 0%, #7ee787 100%);
   color: #082012;
   font-weight: 700;
@@ -269,7 +252,7 @@ a {
 
 .ghost-button,
 .history-chip {
-  padding: 12px 16px;
+  padding: 11px 14px;
   background: rgba(152, 173, 199, 0.08);
   color: var(--text);
   border: 1px solid var(--line);
@@ -282,22 +265,28 @@ a {
 }
 
 .history-list {
-  display: flex;
+  display: grid;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
 .history-chip {
-  max-width: 100%;
-  display: grid;
-  gap: 4px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
+  border-radius: 16px;
 }
 
 .history-chip small {
   color: var(--muted);
+}
+
+.history-chip.active {
+  background: rgba(99, 230, 190, 0.12);
+  border-color: rgba(99, 230, 190, 0.24);
 }
 
 .status-badge {
@@ -325,20 +314,19 @@ a {
   border-color: rgba(255, 143, 143, 0.24);
 }
 
-.job-meta {
+.job-strip {
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.job-meta > div {
-  min-width: 120px;
-}
-
-.meta-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+.job-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .progress-rail,
@@ -382,6 +370,42 @@ a {
   gap: 16px;
 }
 
+.result-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.result-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.result-tab {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+
+.result-tab.active {
+  color: var(--text);
+  background: rgba(99, 230, 190, 0.14);
+  border-color: rgba(99, 230, 190, 0.24);
+}
+
+.result-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.8fr);
+  gap: 14px;
+}
+
 .log-panel {
   display: grid;
   gap: 12px;
@@ -421,6 +445,14 @@ a {
   padding: 18px;
 }
 
+.compact-card {
+  padding: 14px;
+}
+
+.solo-card {
+  min-height: 240px;
+}
+
 .feature-card,
 .plan-card {
   grid-column: span 2;
@@ -445,6 +477,10 @@ a {
   aspect-ratio: 16 / 9;
   object-fit: cover;
   background: rgba(0, 0, 0, 0.35);
+}
+
+.hero-image {
+  min-height: 320px;
 }
 
 .plan-summary {
@@ -600,12 +636,9 @@ a {
 }
 
 @media (max-width: 900px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-
   .field-grid,
-  .artifact-grid {
+  .artifact-grid,
+  .result-grid {
     grid-template-columns: 1fr;
   }
 
@@ -637,7 +670,7 @@ a {
   .history-header,
   .artifact-header,
   .quota-row,
-  .job-meta {
+  .job-strip {
     align-items: flex-start;
     flex-direction: column;
   }

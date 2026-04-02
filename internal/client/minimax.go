@@ -178,9 +178,11 @@ func (c *MiniMaxClient) GenerateImage(ctx context.Context, prompt, aspectRatio s
 		return nil, "", err
 	}
 
-	// 响应: data.image_base64 (string)
 	dataField, _ := data["data"].(map[string]interface{})
-	imageBase64, _ := dataField["image_base64"].(string)
+	imageBase64, err := extractImageBase64(dataField["image_base64"])
+	if err != nil {
+		return nil, "", fmt.Errorf("image_generation returned invalid image_base64: %w", err)
+	}
 	if imageBase64 == "" {
 		return nil, "", fmt.Errorf("image_generation returned no image_base64: %v", data)
 	}
@@ -191,6 +193,29 @@ func (c *MiniMaxClient) GenerateImage(ctx context.Context, prompt, aspectRatio s
 	}
 
 	return imageBytes, imageBase64, nil
+}
+
+func extractImageBase64(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return v, nil
+	case []string:
+		if len(v) == 0 {
+			return "", nil
+		}
+		return v[0], nil
+	case []interface{}:
+		if len(v) == 0 {
+			return "", nil
+		}
+		first, ok := v[0].(string)
+		if !ok {
+			return "", fmt.Errorf("first image entry is %T", v[0])
+		}
+		return first, nil
+	default:
+		return "", fmt.Errorf("unsupported type %T", value)
+	}
 }
 
 // --- 视频生成 ---

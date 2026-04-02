@@ -85,6 +85,67 @@ func TestGenerateImage_PayloadFormat(t *testing.T) {
 	}
 }
 
+func TestGenerateImage_AcceptsArrayResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(`{
+			"base_resp": {"status_code": 0},
+			"data": {
+				"image_base64": [
+					"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+				]
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	origAPIBase := APIBase
+	APIBase = server.URL
+	defer func() { APIBase = origAPIBase }()
+
+	client := NewClient("test-api-key")
+	ctx := context.Background()
+
+	imageData, imageBase64, err := client.GenerateImage(ctx, "a paper boat", "16:9", true)
+	if err != nil {
+		t.Fatalf("GenerateImage failed: %v", err)
+	}
+
+	if len(imageData) == 0 {
+		t.Fatal("expected non-empty image data")
+	}
+	if imageBase64 == "" {
+		t.Fatal("expected non-empty base64 string")
+	}
+}
+
+func TestGenerateImage_RejectsInvalidArrayEntry(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		w.Write([]byte(`{
+			"base_resp": {"status_code": 0},
+			"data": {
+				"image_base64": [123]
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	origAPIBase := APIBase
+	APIBase = server.URL
+	defer func() { APIBase = origAPIBase }()
+
+	client := NewClient("test-api-key")
+	ctx := context.Background()
+
+	_, _, err := client.GenerateImage(ctx, "a paper boat", "16:9", true)
+	if err == nil {
+		t.Fatal("expected error for invalid image_base64 array entry")
+	}
+}
+
 // TestCreateVideoTask_PayloadFormat 验证视频任务创建的 payload 格式与 Python 版本一致
 func TestCreateVideoTask_PayloadFormat(t *testing.T) {
 	var receivedPayload map[string]interface{}

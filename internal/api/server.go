@@ -78,6 +78,7 @@ func (s *Server) setupRoutes() {
 	{
 		v1.GET("/jobs", s.listJobs)
 		v1.GET("/jobs/:id", s.getJob)
+		v1.POST("/image", s.handleImage)
 		v1.POST("/clip", s.handleClip)
 		v1.POST("/plan", s.handlePlan)
 		v1.POST("/voice", s.handleVoice)
@@ -211,6 +212,8 @@ func collectArtifacts(output interface{}) []schemas.JobArtifact {
 	}
 
 	switch result := output.(type) {
+	case *schemas.ImageResult:
+		add("image", "image", result.ImagePath)
 	case *schemas.ClipResult:
 		add("image", "image", result.ImagePath)
 		add("video", "video", result.VideoPath)
@@ -289,6 +292,51 @@ func (s *Server) loadJobsFromDisk() {
 
 		s.jobs[job.JobID] = &job
 	}
+}
+
+// --- Image ---
+
+type ImageRequest struct {
+	Prompt      string `json:"prompt" binding:"required"`
+	AspectRatio string `json:"aspect_ratio"`
+}
+
+func (s *Server) handleImage(c *gin.Context) {
+	var req ImageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	jobID := uuid.New().String()
+	jobDir := filepath.Join(s.outputDir, jobID)
+	os.MkdirAll(jobDir, 0755)
+
+	s.createJob(jobID, "image", req)
+
+	go func() {
+		ctx := context.Background()
+		s.appendJobLog(jobID, "generating image...")
+
+		imageData, _, err := s.client.GenerateImage(ctx, req.Prompt, defaultStr(req.AspectRatio, "16:9"), false)
+		if err != nil {
+			s.updateJob(jobID, "failed", "image", 0, nil, err.Error())
+			return
+		}
+
+		outputPath := filepath.Join(jobDir, "image.jpg")
+		if err := os.WriteFile(outputPath, imageData, 0644); err != nil {
+			s.updateJob(jobID, "failed", "image", 0, nil, err.Error())
+			return
+		}
+
+		s.appendJobLog(jobID, fmt.Sprintf("image saved to: %s", outputPath))
+		s.updateJob(jobID, "completed", "image", 1.0, &schemas.ImageResult{
+			ImagePath: outputPath,
+		}, "")
+	}()
+
+	c.JSON(http.StatusAccepted, gin.H{"job_id": jobID, "status": "processing"})
 }
 
 // --- Clip ---
