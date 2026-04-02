@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Component, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 type MakeRequest = {
   theme: string;
@@ -105,9 +105,7 @@ type QuotaEntry = {
   current_weekly_usage_count: number;
 };
 
-type QuotaResult = {
-  entries: QuotaEntry[];
-};
+type QuotaResult = QuotaEntry[] | { entries: QuotaEntry[] };
 
 type PlanData = {
   title: string;
@@ -236,6 +234,22 @@ function remainingCount(total: number, used: number) {
   return Math.max(0, total - used);
 }
 
+function isTextWindowQuota(modelName: string) {
+  return /m2/i.test(modelName);
+}
+
+function normalizeQuotaEntries(input: QuotaResult | null) {
+  if (!input) {
+    return [] as QuotaEntry[];
+  }
+
+  if (Array.isArray(input)) {
+    return input;
+  }
+
+  return Array.isArray(input.entries) ? input.entries : [];
+}
+
 function formatStatus(status: Job["status"]) {
   switch (status) {
     case "completed":
@@ -246,6 +260,40 @@ function formatStatus(status: Job["status"]) {
       return "等待中";
     default:
       return "处理中";
+  }
+}
+
+type ErrorBoundaryProps = {
+  children: ReactNode;
+};
+
+type ErrorBoundaryState = {
+  hasError: boolean;
+};
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("MiniMax Studio render error", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="app-shell">
+          <div className="panel">
+            <p className="error-banner">页面渲染失败，请刷新或重启前端。</p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
   }
 }
 
@@ -301,21 +349,24 @@ export default function App() {
   }, [job]);
 
   const quotaSummary = useMemo(() => {
-    const entries = quota?.entries ?? [];
+    const entries = normalizeQuotaEntries(quota);
 
     return entries.reduce(
       (accumulator, entry) => {
-        accumulator.interval += remainingCount(
-          entry.current_interval_total_count,
-          entry.current_interval_usage_count,
-        );
-        accumulator.weekly += remainingCount(
-          entry.current_weekly_total_count,
-          entry.current_weekly_usage_count,
-        );
+        if (isTextWindowQuota(entry.model_name)) {
+          accumulator.window += remainingCount(
+            entry.current_interval_total_count,
+            entry.current_interval_usage_count,
+          );
+        } else {
+          accumulator.daily += remainingCount(
+            entry.current_interval_total_count,
+            entry.current_interval_usage_count,
+          );
+        }
         return accumulator;
       },
-      { interval: 0, weekly: 0 },
+      { window: 0, daily: 0 },
     );
   }, [quota]);
 
@@ -603,6 +654,7 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className="app-shell">
       <header className="hero">
         <div className="hero-copy">
@@ -1300,12 +1352,14 @@ export default function App() {
             </div>
             <div className="quota-actions">
               <div className="quota-total">
-                <span>剩余</span>
-                <strong>{quotaSummary.interval}</strong>
-                <small>周 {quotaSummary.weekly}</small>
+                <span>5h / 今日</span>
+                <strong>
+                  {quotaSummary.window} / {quotaSummary.daily}
+                </strong>
+                <small>全部剩余</small>
               </div>
               <button type="button" className="ghost-button" onClick={() => void fetchQuota()}>
-                {isQuotaLoading ? "刷新中" : "查看全部"}
+                {isQuotaLoading ? "刷新中" : "刷新额度"}
               </button>
             </div>
           </div>
@@ -1313,8 +1367,8 @@ export default function App() {
           {quotaError ? <p className="error-banner">{quotaError}</p> : null}
 
           <div className="quota-list">
-            {quota?.entries?.length ? (
-              quota.entries.map((entry) => {
+            {normalizeQuotaEntries(quota).length ? (
+              normalizeQuotaEntries(quota).map((entry) => {
                 const intervalUsage = usagePercent(
                   entry.current_interval_usage_count,
                   entry.current_interval_total_count,
@@ -1329,9 +1383,14 @@ export default function App() {
                     <div className="quota-title">
                       <strong>{entry.model_name}</strong>
                     </div>
+                    {isTextWindowQuota(entry.model_name) ? (
+                      <p className="quota-kind">5 小时窗口</p>
+                    ) : (
+                      <p className="quota-kind">每日配额</p>
+                    )}
                     <div className="quota-remain-grid">
                       <div className="quota-remain-card">
-                        <span>当前剩余</span>
+                        <span>{isTextWindowQuota(entry.model_name) ? "窗口剩余" : "今日剩余"}</span>
                         <strong>
                           {remainingCount(
                             entry.current_interval_total_count,
@@ -1339,18 +1398,20 @@ export default function App() {
                           )}
                         </strong>
                       </div>
-                      <div className="quota-remain-card warm">
-                        <span>本周剩余</span>
-                        <strong>
-                          {remainingCount(
-                            entry.current_weekly_total_count,
-                            entry.current_weekly_usage_count,
-                          )}
-                        </strong>
-                      </div>
+                      {isTextWindowQuota(entry.model_name) ? (
+                        <div className="quota-remain-card warm">
+                          <span>周剩余</span>
+                          <strong>
+                            {remainingCount(
+                              entry.current_weekly_total_count,
+                              entry.current_weekly_usage_count,
+                            )}
+                          </strong>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="quota-row">
-                      <span>当前</span>
+                      <span>{isTextWindowQuota(entry.model_name) ? "窗口" : "今日"}</span>
                       <strong>
                         {entry.current_interval_usage_count}/{entry.current_interval_total_count}
                       </strong>
@@ -1358,15 +1419,19 @@ export default function App() {
                     <div className="mini-bar">
                       <div style={{ width: `${intervalUsage}%` }} />
                     </div>
-                    <div className="quota-row">
-                      <span>本周</span>
-                      <strong>
-                        {entry.current_weekly_usage_count}/{entry.current_weekly_total_count}
-                      </strong>
-                    </div>
-                    <div className="mini-bar warm">
-                      <div style={{ width: `${weeklyUsage}%` }} />
-                    </div>
+                    {isTextWindowQuota(entry.model_name) ? (
+                      <>
+                        <div className="quota-row">
+                          <span>本周</span>
+                          <strong>
+                            {entry.current_weekly_usage_count}/{entry.current_weekly_total_count}
+                          </strong>
+                        </div>
+                        <div className="mini-bar warm">
+                          <div style={{ width: `${weeklyUsage}%` }} />
+                        </div>
+                      </>
+                    ) : null}
                   </article>
                 );
               })
@@ -1377,5 +1442,6 @@ export default function App() {
         </section>
       </main>
     </div>
+    </ErrorBoundary>
   );
 }
