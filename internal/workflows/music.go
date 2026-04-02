@@ -3,6 +3,7 @@ package workflows
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/minimax-ai/minimax-studio/internal/client"
 	"github.com/minimax-ai/minimax-studio/internal/schemas"
@@ -26,7 +27,7 @@ func (w *MusicWorkflow) Run(ctx context.Context, opts schemas.MusicOptions, repo
 
 	reporter("generating music...")
 
-	taskID, err := w.client.GenerateMusic(
+	audioData, err := w.client.GenerateMusic(
 		ctx,
 		opts.Prompt,
 		opts.Model,
@@ -36,7 +37,10 @@ func (w *MusicWorkflow) Run(ctx context.Context, opts schemas.MusicOptions, repo
 		return nil, fmt.Errorf("failed to generate music: %w", err)
 	}
 
-	reporter(fmt.Sprintf("music task id: %s", taskID))
+	if err := os.WriteFile(opts.OutputPath, audioData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write music: %w", err)
+	}
+
 	reporter(fmt.Sprintf("music saved to: %s", opts.OutputPath))
 
 	return &schemas.MusicResult{

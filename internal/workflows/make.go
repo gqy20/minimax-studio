@@ -201,16 +201,18 @@ func (w *MakeWorkflow) Run(ctx context.Context, opts MakeOptions, reporter Repor
 	if opts.MusicMode != "skip" {
 		tentativeMusicPath := filepath.Join(opts.OutputDir, fmt.Sprintf("music.%s", opts.AudioFormat))
 		reporter("step 5/7: generating music...")
-		musicTaskID, err := w.client.GenerateMusic(ctx, plan.MusicPrompt, opts.MusicModel, opts.AudioFormat)
+		musicData, err := w.client.GenerateMusic(ctx, plan.MusicPrompt, opts.MusicModel, opts.AudioFormat)
 		if err != nil {
 			if opts.MusicMode == "required" {
 				return nil, fmt.Errorf("failed to generate music: %w", err)
 			}
 			reporter(fmt.Sprintf("music generation unavailable, continuing without: %v", err))
 		} else {
-			_ = musicTaskID // TODO: poll music task
+			if err := os.WriteFile(tentativeMusicPath, musicData, 0644); err != nil {
+				return nil, fmt.Errorf("failed to write music: %w", err)
+			}
 			musicPath = tentativeMusicPath
-			reporter(fmt.Sprintf("music task id: %s", musicTaskID))
+			reporter(fmt.Sprintf("music saved to: %s", musicPath))
 		}
 	} else {
 		reporter("step 5/7: skipping music generation by request...")

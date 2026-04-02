@@ -23,6 +23,23 @@ type ClipRequest = {
   resolution: string;
 };
 
+type VoiceRequest = {
+  text: string;
+  voice_id: string;
+  audio_format: string;
+};
+
+type MusicRequest = {
+  prompt: string;
+  audio_format: string;
+};
+
+type StitchRequest = {
+  videos: string;
+  narration: string;
+  music: string;
+};
+
 type MakeResult = {
   output_dir: string;
   plan_path: string;
@@ -42,6 +59,20 @@ type ClipResult = {
   video_path: string;
 };
 
+type VoiceResult = {
+  output_path: string;
+};
+
+type MusicResult = {
+  output_path: string;
+};
+
+type StitchResult = {
+  stitched_video_path: string;
+  padded_video_path: string;
+  final_video_path: string;
+};
+
 type Job = {
   job_id: string;
   status: "pending" | "processing" | "completed" | "failed";
@@ -49,7 +80,7 @@ type Job = {
   stage: string;
   created_at?: string;
   updated_at?: string;
-  output?: MakeResult | PlanResult | ClipResult;
+  output?: MakeResult | PlanResult | ClipResult | VoiceResult | MusicResult | StitchResult;
   error?: string;
   logs?: Array<{
     time: string;
@@ -116,7 +147,24 @@ const DEFAULT_CLIP_FORM: ClipRequest = {
   resolution: "720p",
 };
 
-type WorkflowMode = "make" | "plan" | "clip";
+const DEFAULT_VOICE_FORM: VoiceRequest = {
+  text: "海风从旧码头吹过，纸船沿着微光漂向远方。",
+  voice_id: "male-qn-qingse",
+  audio_format: "mp3",
+};
+
+const DEFAULT_MUSIC_FORM: MusicRequest = {
+  prompt: "warm cinematic piano with soft ambient texture, no vocals",
+  audio_format: "mp3",
+};
+
+const DEFAULT_STITCH_FORM: StitchRequest = {
+  videos: "",
+  narration: "",
+  music: "",
+};
+
+type WorkflowMode = "make" | "plan" | "clip" | "voice" | "music" | "stitch";
 
 function apiUrl(path: string) {
   if (!API_ROOT) {
@@ -184,6 +232,10 @@ function usagePercent(used: number, total: number) {
   return Math.min(100, Math.round((used / total) * 100));
 }
 
+function remainingCount(total: number, used: number) {
+  return Math.max(0, total - used);
+}
+
 function formatStatus(status: Job["status"]) {
   switch (status) {
     case "completed":
@@ -202,6 +254,9 @@ export default function App() {
   const [form, setForm] = useState<MakeRequest>(DEFAULT_FORM);
   const [planForm, setPlanForm] = useState<PlanRequest>(DEFAULT_PLAN_FORM);
   const [clipForm, setClipForm] = useState<ClipRequest>(DEFAULT_CLIP_FORM);
+  const [voiceForm, setVoiceForm] = useState<VoiceRequest>(DEFAULT_VOICE_FORM);
+  const [musicForm, setMusicForm] = useState<MusicRequest>(DEFAULT_MUSIC_FORM);
+  const [stitchForm, setStitchForm] = useState<StitchRequest>(DEFAULT_STITCH_FORM);
   const [job, setJob] = useState<Job | null>(null);
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [quota, setQuota] = useState<QuotaResult | null>(null);
@@ -225,6 +280,7 @@ export default function App() {
     const finalVideoPath =
       output && "final_video_path" in output ? output.final_video_path : undefined;
     const imagePath = output && "image_path" in output ? output.image_path : undefined;
+    const audioPath = output && "output_path" in output ? output.output_path : undefined;
 
     const fromArtifacts =
       job.artifacts?.reduce<Record<string, string>>((accumulator, artifact) => {
@@ -237,12 +293,31 @@ export default function App() {
       narration:
         fromArtifacts.narration ??
         fromArtifacts.voice ??
-        toAssetUrl(job.job_id, narrationPath),
-      music: fromArtifacts.music ?? toAssetUrl(job.job_id, musicPath),
+        toAssetUrl(job.job_id, narrationPath ?? audioPath),
+      music: fromArtifacts.music ?? toAssetUrl(job.job_id, musicPath ?? audioPath),
       finalVideo: fromArtifacts.final_video ?? fromArtifacts.video ?? toAssetUrl(job.job_id, finalVideoPath),
       image: fromArtifacts.image ?? toAssetUrl(job.job_id, imagePath),
     };
   }, [job]);
+
+  const quotaSummary = useMemo(() => {
+    const entries = quota?.entries ?? [];
+
+    return entries.reduce(
+      (accumulator, entry) => {
+        accumulator.interval += remainingCount(
+          entry.current_interval_total_count,
+          entry.current_interval_usage_count,
+        );
+        accumulator.weekly += remainingCount(
+          entry.current_weekly_total_count,
+          entry.current_weekly_usage_count,
+        );
+        return accumulator;
+      },
+      { interval: 0, weekly: 0 },
+    );
+  }, [quota]);
 
   useEffect(() => {
     void fetchJobs();
@@ -439,29 +514,99 @@ export default function App() {
     }
   }
 
+  async function handleVoiceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+    setJobError("");
+
+    try {
+      const response = await requestJSON<{ job_id: string; status: string }>("/api/v1/voice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: voiceForm.text.trim(),
+          voice_id: voiceForm.voice_id,
+          audio_format: voiceForm.audio_format,
+        }),
+      });
+
+      await fetchJob(response.job_id);
+      await fetchJobs();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "语音任务提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleMusicSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+    setJobError("");
+
+    try {
+      const response = await requestJSON<{ job_id: string; status: string }>("/api/v1/music", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: musicForm.prompt.trim(),
+          audio_format: musicForm.audio_format,
+        }),
+      });
+
+      await fetchJob(response.job_id);
+      await fetchJobs();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "音乐任务提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleStitchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError("");
+    setJobError("");
+
+    const videos = stitchForm.videos
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    try {
+      const response = await requestJSON<{ job_id: string; status: string }>("/api/v1/stitch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          videos,
+          narration: stitchForm.narration.trim(),
+          music: stitchForm.music.trim(),
+        }),
+      });
+
+      await fetchJob(response.job_id);
+      await fetchJobs();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "素材合成任务提交失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">MiniMax Studio</p>
-          <h1>把 Go 工作流包装成真正可用的视频工作台</h1>
-          <p className="hero-text">
-            当前前端先聚焦最高频路径：输入主题，提交整片生成任务，持续查看状态，并直接预览最终视频与中间资产。
-          </p>
-        </div>
-        <div className="hero-metrics">
-          <div className="metric-card">
-            <span>接口入口</span>
-            <strong>`/api/v1/make`</strong>
-          </div>
-          <div className="metric-card">
-            <span>任务查询</span>
-            <strong>`/api/v1/jobs/:id`</strong>
-          </div>
-          <div className="metric-card">
-            <span>产物访问</span>
-            <strong>`/api/v1/output/*`</strong>
-          </div>
+          <h1>MiniMax Studio</h1>
         </div>
       </header>
 
@@ -469,10 +614,9 @@ export default function App() {
         <section className="panel form-panel">
           <div className="panel-heading">
             <div>
-              <p className="panel-kicker">Create</p>
-              <h2>Workflow Launcher</h2>
+              <h2>Run</h2>
             </div>
-            <span className="panel-note">多入口工作流</span>
+            <span className="panel-note">{mode}</span>
           </div>
 
           <div className="mode-switcher">
@@ -496,6 +640,27 @@ export default function App() {
               onClick={() => setMode("clip")}
             >
               Clip
+            </button>
+            <button
+              type="button"
+              className={`mode-chip ${mode === "voice" ? "active" : ""}`}
+              onClick={() => setMode("voice")}
+            >
+              Voice
+            </button>
+            <button
+              type="button"
+              className={`mode-chip ${mode === "music" ? "active" : ""}`}
+              onClick={() => setMode("music")}
+            >
+              Music
+            </button>
+            <button
+              type="button"
+              className={`mode-chip ${mode === "stitch" ? "active" : ""}`}
+              onClick={() => setMode("stitch")}
+            >
+              Stitch
             </button>
           </div>
 
@@ -762,11 +927,168 @@ export default function App() {
             </form>
           ) : null}
 
+          {mode === "voice" ? (
+            <form className="make-form" onSubmit={handleVoiceSubmit}>
+              <label className="field">
+                <span>旁白文本</span>
+                <textarea
+                  rows={5}
+                  value={voiceForm.text}
+                  onChange={(event) =>
+                    setVoiceForm((current) => ({ ...current, text: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>音色</span>
+                  <input
+                    type="text"
+                    value={voiceForm.voice_id}
+                    onChange={(event) =>
+                      setVoiceForm((current) => ({ ...current, voice_id: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>格式</span>
+                  <select
+                    value={voiceForm.audio_format}
+                    onChange={(event) =>
+                      setVoiceForm((current) => ({ ...current, audio_format: event.target.value }))
+                    }
+                  >
+                    <option value="mp3">mp3</option>
+                    <option value="wav">wav</option>
+                  </select>
+                </label>
+              </div>
+
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "生成语音"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setVoiceForm(DEFAULT_VOICE_FORM)}
+                  disabled={isSubmitting}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {mode === "music" ? (
+            <form className="make-form" onSubmit={handleMusicSubmit}>
+              <label className="field">
+                <span>音乐提示词</span>
+                <textarea
+                  rows={5}
+                  value={musicForm.prompt}
+                  onChange={(event) =>
+                    setMusicForm((current) => ({ ...current, prompt: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>格式</span>
+                <select
+                  value={musicForm.audio_format}
+                  onChange={(event) =>
+                    setMusicForm((current) => ({ ...current, audio_format: event.target.value }))
+                  }
+                >
+                  <option value="mp3">mp3</option>
+                  <option value="wav">wav</option>
+                </select>
+              </label>
+
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "生成音乐"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setMusicForm(DEFAULT_MUSIC_FORM)}
+                  disabled={isSubmitting}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {mode === "stitch" ? (
+            <form className="make-form" onSubmit={handleStitchSubmit}>
+              <label className="field">
+                <span>视频路径列表</span>
+                <textarea
+                  rows={5}
+                  value={stitchForm.videos}
+                  onChange={(event) =>
+                    setStitchForm((current) => ({ ...current, videos: event.target.value }))
+                  }
+                  placeholder={"每行一个服务端可访问的视频路径"}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>旁白路径</span>
+                <input
+                  type="text"
+                  value={stitchForm.narration}
+                  onChange={(event) =>
+                    setStitchForm((current) => ({ ...current, narration: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>背景音乐路径</span>
+                <input
+                  type="text"
+                  value={stitchForm.music}
+                  onChange={(event) =>
+                    setStitchForm((current) => ({ ...current, music: event.target.value }))
+                  }
+                  placeholder="可选"
+                />
+              </label>
+
+              {submitError ? <p className="error-banner">{submitError}</p> : null}
+
+              <div className="form-actions">
+                <button type="submit" className="primary-button" disabled={isSubmitting}>
+                  {isSubmitting ? "提交中..." : "合成成片"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setStitchForm(DEFAULT_STITCH_FORM)}
+                  disabled={isSubmitting}
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          ) : null}
+
           <div className="history-block">
             <div className="history-header">
-              <h3>最近任务</h3>
+              <h3>Jobs</h3>
               <button type="button" className="text-link history-refresh" onClick={() => void fetchJobs()}>
-                刷新列表
+                刷新
               </button>
             </div>
             <div className="history-list">
@@ -792,8 +1114,7 @@ export default function App() {
         <section className="panel status-panel">
           <div className="panel-heading">
             <div>
-              <p className="panel-kicker">Monitor</p>
-              <h2>Job Console</h2>
+              <h2>Job</h2>
             </div>
             {job ? <span className={`status-badge ${job.status}`}>{formatStatus(job.status)}</span> : null}
           </div>
@@ -824,10 +1145,10 @@ export default function App() {
 
               <p className="status-copy">
                 {job.status === "processing"
-                  ? "当前后端只暴露任务级状态，前端会持续轮询直到完成或失败。"
+                  ? "运行中"
                   : job.status === "completed"
-                    ? "任务已完成，可以直接预览视频、旁白和分镜规划。"
-                    : "任务执行失败，优先检查 API Key、MiniMax 配额和输入路径。"}
+                    ? "已完成"
+                    : "失败"}
               </p>
 
               {job.error ? <p className="error-banner">{job.error}</p> : null}
@@ -839,20 +1160,20 @@ export default function App() {
                   className="ghost-button"
                   onClick={() => void fetchJob(job.job_id)}
                 >
-                  手动刷新
+                  刷新
                 </button>
                 {artifacts?.finalVideo ? (
                   <a className="text-link" href={artifacts.finalVideo} target="_blank" rel="noreferrer">
-                    打开最终视频
+                    打开
                   </a>
                 ) : null}
               </div>
 
               {job.logs?.length ? (
-                <div className="log-panel">
-                  <div className="artifact-header">
-                    <h3>Recent Logs</h3>
-                    <span>{job.logs.length} entries</span>
+                  <div className="log-panel">
+                    <div className="artifact-header">
+                    <h3>Logs</h3>
+                    <span>{job.logs.length}</span>
                   </div>
                   <div className="log-list">
                     {job.logs.slice().reverse().map((entry, index) => (
@@ -870,9 +1191,9 @@ export default function App() {
                   {artifacts.image ? (
                     <article className="artifact-card">
                       <div className="artifact-header">
-                        <h3>Key Frame</h3>
+                        <h3>Frame</h3>
                         <a href={artifacts.image} target="_blank" rel="noreferrer">
-                          查看原图
+                          打开
                         </a>
                       </div>
                       <img className="image-frame" src={artifacts.image} alt="Generated key frame" />
@@ -881,10 +1202,10 @@ export default function App() {
 
                   <article className="artifact-card feature-card">
                     <div className="artifact-header">
-                      <h3>{artifacts.image && !artifacts.plan ? "Clip Video" : "Final Video"}</h3>
+                      <h3>{artifacts.image && !artifacts.plan ? "Video" : "Final"}</h3>
                       {artifacts.finalVideo ? (
                         <a href={artifacts.finalVideo} target="_blank" rel="noreferrer">
-                          新窗口打开
+                          打开
                         </a>
                       ) : null}
                     </div>
@@ -900,7 +1221,7 @@ export default function App() {
                       <h3>Narration</h3>
                       {artifacts.narration ? (
                         <a href={artifacts.narration} target="_blank" rel="noreferrer">
-                          下载
+                          打开
                         </a>
                       ) : null}
                     </div>
@@ -916,23 +1237,23 @@ export default function App() {
                       <h3>Music</h3>
                       {artifacts.music ? (
                         <a href={artifacts.music} target="_blank" rel="noreferrer">
-                          下载
+                          打开
                         </a>
                       ) : null}
                     </div>
                     {artifacts.music ? (
                       <audio controls className="audio-frame" src={artifacts.music} />
                     ) : (
-                      <p className="muted-text">当前任务没有背景音乐文件，或后端以 optional 模式跳过了生成。</p>
+                      <p className="muted-text">无</p>
                     )}
                   </article>
 
                   <article className="artifact-card plan-card">
                     <div className="artifact-header">
-                      <h3>Storyboard Plan</h3>
+                      <h3>Plan</h3>
                       {artifacts.plan ? (
                         <a href={artifacts.plan} target="_blank" rel="noreferrer">
-                          查看 JSON
+                          打开
                         </a>
                       ) : null}
                     </div>
@@ -955,19 +1276,19 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <p className="muted-text">完成后会在这里加载 `plan.json` 的结构化内容。</p>
+                      <p className="muted-text">无</p>
                     )}
                   </article>
                 </div>
               ) : (
                 <div className="empty-state">
-                  <p>提交一个 `make` 任务后，这里会显示状态、日志说明和最终产物。</p>
+                  <p>暂无任务</p>
                 </div>
               )}
             </div>
           ) : (
             <div className="empty-state">
-              <p>当前没有选中任务。左侧提交新任务，或者从最近任务列表恢复一个 Job。</p>
+              <p>未选择</p>
             </div>
           )}
         </section>
@@ -975,12 +1296,18 @@ export default function App() {
         <section className="panel quota-panel">
           <div className="panel-heading">
             <div>
-              <p className="panel-kicker">Capacity</p>
-              <h2>Quota Snapshot</h2>
+              <h2>Quota</h2>
             </div>
-            <button type="button" className="ghost-button" onClick={() => void fetchQuota()}>
-              {isQuotaLoading ? "刷新中..." : "刷新额度"}
-            </button>
+            <div className="quota-actions">
+              <div className="quota-total">
+                <span>剩余</span>
+                <strong>{quotaSummary.interval}</strong>
+                <small>周 {quotaSummary.weekly}</small>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => void fetchQuota()}>
+                {isQuotaLoading ? "刷新中" : "查看全部"}
+              </button>
+            </div>
           </div>
 
           {quotaError ? <p className="error-banner">{quotaError}</p> : null}
@@ -1002,8 +1329,28 @@ export default function App() {
                     <div className="quota-title">
                       <strong>{entry.model_name}</strong>
                     </div>
+                    <div className="quota-remain-grid">
+                      <div className="quota-remain-card">
+                        <span>当前剩余</span>
+                        <strong>
+                          {remainingCount(
+                            entry.current_interval_total_count,
+                            entry.current_interval_usage_count,
+                          )}
+                        </strong>
+                      </div>
+                      <div className="quota-remain-card warm">
+                        <span>本周剩余</span>
+                        <strong>
+                          {remainingCount(
+                            entry.current_weekly_total_count,
+                            entry.current_weekly_usage_count,
+                          )}
+                        </strong>
+                      </div>
+                    </div>
                     <div className="quota-row">
-                      <span>当前周期</span>
+                      <span>当前</span>
                       <strong>
                         {entry.current_interval_usage_count}/{entry.current_interval_total_count}
                       </strong>
@@ -1012,7 +1359,7 @@ export default function App() {
                       <div style={{ width: `${intervalUsage}%` }} />
                     </div>
                     <div className="quota-row">
-                      <span>周配额</span>
+                      <span>本周</span>
                       <strong>
                         {entry.current_weekly_usage_count}/{entry.current_weekly_total_count}
                       </strong>
@@ -1024,7 +1371,7 @@ export default function App() {
                 );
               })
             ) : (
-              <p className="muted-text">还没有额度数据。启动 Go server 并配置好 `MINIMAX_API_KEY` 后再刷新。</p>
+              <p className="muted-text">无数据</p>
             )}
           </div>
         </section>

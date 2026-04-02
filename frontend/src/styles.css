@@ -482,6 +482,31 @@ a {
   grid-template-columns: 1fr;
 }
 
+.quota-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quota-total {
+  display: grid;
+  min-width: 92px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  text-align: right;
+}
+
+.quota-total span,
+.quota-total small {
+  color: var(--muted);
+}
+
+.quota-total strong {
+  font-size: 1.1rem;
+}
+
 .quota-card {
   padding: 16px;
   border-radius: var(--radius-lg);
@@ -491,12 +516,43 @@ a {
   margin-bottom: 12px;
 }
 
+.quota-remain-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.quota-remain-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(99, 230, 190, 0.08);
+  border: 1px solid rgba(99, 230, 190, 0.16);
+}
+
+.quota-remain-card.warm {
+  background: rgba(248, 184, 111, 0.08);
+  border-color: rgba(248, 184, 111, 0.16);
+}
+
+.quota-remain-card span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.quota-remain-card strong {
+  font-size: 1.2rem;
+}
+
 .quota-row {
   font-size: 0.92rem;
 }
 
 .error-banner,
-.empty-state {
+.empty-state,
+.hint-banner {
   border-radius: 18px;
   padding: 14px 16px;
 }
@@ -512,6 +568,13 @@ a {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.03);
   border: 1px dashed var(--line);
+}
+
+.hint-banner {
+  margin: 0;
+  color: #ffe7b8;
+  background: rgba(248, 184, 111, 0.1);
+  border: 1px solid rgba(248, 184, 111, 0.18);
 }
 
 .text-link,
@@ -564,6 +627,7 @@ a {
   .panel-heading,
   .form-actions,
   .console-actions,
+  .quota-actions,
   .history-header,
   .artifact-header,
   .quota-row,

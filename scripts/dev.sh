@@ -28,10 +28,8 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "${ROOT_DIR}/bin"
 
-if [[ ! -f "${ROOT_DIR}/bin/ms" ]]; then
-  echo "Building backend binary..."
-  (cd "${ROOT_DIR}" && make build)
-fi
+echo "Building backend binary..."
+(cd "${ROOT_DIR}" && make build)
 
 if [[ ! -d "${ROOT_DIR}/frontend/node_modules" ]]; then
   echo "Installing frontend dependencies..."
