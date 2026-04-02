@@ -54,7 +54,7 @@ build-darwin: frontend-build embed-frontend
 build-windows: frontend-build embed-frontend
 	@echo "Building for Windows..."
 	@mkdir -p $(BINARY_DIR)/windows
-	GOOS=windows GOARCH=amd64 $(GOBUILD) -ldflags "-H windowsgui -X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)" -tags embed_frontend -o $(BINARY_DIR)/windows/$(BINARY_NAME).exe ./cmd/ms
+	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -tags embed_frontend -o $(BINARY_DIR)/windows/$(BINARY_NAME).exe ./cmd/ms
 
 # Clean
 clean:

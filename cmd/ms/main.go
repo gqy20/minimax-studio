@@ -43,10 +43,6 @@ func main() {
 	if isDoubleClick() {
 		runningAsGUI = true
 		os.Args = append(os.Args, "server")
-		// In GUI mode on Windows, hide the console window
-		if runtime.GOOS == "windows" {
-			HideConsole()
-		}
 	}
 
 	if err := RootCmd.Execute(); err != nil {
