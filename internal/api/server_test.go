@@ -12,6 +12,15 @@ import (
 	"github.com/minimax-ai/minimax-studio/internal/schemas"
 )
 
+// asyncTestDir creates a temp dir that is cleaned up after a short delay,
+// giving background goroutines time to finish writing.
+func asyncTestDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Cleanup(func() { time.Sleep(500 * time.Millisecond) })
+	return dir
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	s := NewServer(t.TempDir(), "test-key", "")
 
@@ -121,7 +130,7 @@ func TestClip_MissingPrompt(t *testing.T) {
 }
 
 func TestClip_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key", "")
+	s := NewServer(asyncTestDir(t), "test-key", "")
 
 	body := `{"prompt":"a paper boat","subject":"drifts slowly"}`
 	req := httptest.NewRequest("POST", "/api/v1/clip", strings.NewReader(body))
@@ -157,7 +166,7 @@ func TestPlan_MissingTheme(t *testing.T) {
 }
 
 func TestPlan_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key", "")
+	s := NewServer(asyncTestDir(t), "test-key", "")
 
 	body := `{"theme":"纸船"}`
 	req := httptest.NewRequest("POST", "/api/v1/plan", strings.NewReader(body))
@@ -217,7 +226,7 @@ func TestMusic_MissingPrompt(t *testing.T) {
 }
 
 func TestMusic_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key", "")
+	s := NewServer(asyncTestDir(t), "test-key", "")
 
 	body := `{"prompt":"warm piano"}`
 	req := httptest.NewRequest("POST", "/api/v1/music", strings.NewReader(body))
@@ -257,7 +266,7 @@ func TestMake_MissingTheme(t *testing.T) {
 }
 
 func TestMake_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key", "")
+	s := NewServer(asyncTestDir(t), "test-key", "")
 
 	body := `{"theme":"纸船","scene_count":1}`
 	req := httptest.NewRequest("POST", "/api/v1/make", strings.NewReader(body))
