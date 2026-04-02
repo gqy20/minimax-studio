@@ -11,6 +11,10 @@ dist/
 build/
 node_modules/
 *.egg-info/
+bin/
+
+# Embedded frontend (build artifact)
+internal/api/frontend_dist/
 
 # Generated media and pipeline outputs
 runs/

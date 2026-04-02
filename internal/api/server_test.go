@@ -13,7 +13,7 @@ import (
 )
 
 func TestHealthEndpoint(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -31,7 +31,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestGetJob_NotFound(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("GET", "/api/v1/jobs/nonexistent", nil)
 	w := httptest.NewRecorder()
@@ -43,7 +43,7 @@ func TestGetJob_NotFound(t *testing.T) {
 }
 
 func TestListJobs(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 	s.createJob("older", "clip", map[string]string{"theme": "a"})
 	s.createJob("newer", "make", map[string]string{"theme": "b"})
 	s.updateJob("older", "completed", "clip", 1.0, nil, "")
@@ -75,12 +75,12 @@ func TestListJobs(t *testing.T) {
 
 func TestGetJob_LoadsPersistedJob(t *testing.T) {
 	outputDir := t.TempDir()
-	s := NewServer(outputDir, "test-key")
+	s := NewServer(outputDir, "test-key", "")
 	s.createJob("persisted", "make", map[string]string{"theme": "paper boat"})
 	s.appendJobLog("persisted", "step 1/7: planning storyboard...")
 	s.updateJob("persisted", "completed", "make", 1.0, nil, "")
 
-	reloaded := NewServer(outputDir, "test-key")
+	reloaded := NewServer(outputDir, "test-key", "")
 	req := httptest.NewRequest("GET", "/api/v1/jobs/persisted", nil)
 	w := httptest.NewRecorder()
 	reloaded.engine.ServeHTTP(w, req)
@@ -108,7 +108,7 @@ func TestGetJob_LoadsPersistedJob(t *testing.T) {
 }
 
 func TestClip_MissingPrompt(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/clip", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -121,7 +121,7 @@ func TestClip_MissingPrompt(t *testing.T) {
 }
 
 func TestClip_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	body := `{"prompt":"a paper boat","subject":"drifts slowly"}`
 	req := httptest.NewRequest("POST", "/api/v1/clip", strings.NewReader(body))
@@ -144,7 +144,7 @@ func TestClip_ValidRequest(t *testing.T) {
 }
 
 func TestPlan_MissingTheme(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/plan", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -157,7 +157,7 @@ func TestPlan_MissingTheme(t *testing.T) {
 }
 
 func TestPlan_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	body := `{"theme":"纸船"}`
 	req := httptest.NewRequest("POST", "/api/v1/plan", strings.NewReader(body))
@@ -177,7 +177,7 @@ func TestPlan_ValidRequest(t *testing.T) {
 }
 
 func TestVoice_MissingText(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/voice", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -190,7 +190,7 @@ func TestVoice_MissingText(t *testing.T) {
 }
 
 func TestVoice_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	body := `{"text":"这是一段旁白"}`
 	req := httptest.NewRequest("POST", "/api/v1/voice", strings.NewReader(body))
@@ -204,7 +204,7 @@ func TestVoice_ValidRequest(t *testing.T) {
 }
 
 func TestMusic_MissingPrompt(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/music", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -217,7 +217,7 @@ func TestMusic_MissingPrompt(t *testing.T) {
 }
 
 func TestMusic_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	body := `{"prompt":"warm piano"}`
 	req := httptest.NewRequest("POST", "/api/v1/music", strings.NewReader(body))
@@ -231,7 +231,7 @@ func TestMusic_ValidRequest(t *testing.T) {
 }
 
 func TestStitch_MissingVideos(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/stitch", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -244,7 +244,7 @@ func TestStitch_MissingVideos(t *testing.T) {
 }
 
 func TestMake_MissingTheme(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/make", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -257,7 +257,7 @@ func TestMake_MissingTheme(t *testing.T) {
 }
 
 func TestMake_ValidRequest(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	body := `{"theme":"纸船","scene_count":1}`
 	req := httptest.NewRequest("POST", "/api/v1/make", strings.NewReader(body))
@@ -271,7 +271,7 @@ func TestMake_ValidRequest(t *testing.T) {
 }
 
 func TestCORSMiddleware(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	// OPTIONS preflight
 	req := httptest.NewRequest("OPTIONS", "/api/v1/clip", nil)
@@ -290,7 +290,7 @@ func TestCORSMiddleware(t *testing.T) {
 }
 
 func TestOutput_NotFound(t *testing.T) {
-	s := NewServer(t.TempDir(), "test-key")
+	s := NewServer(t.TempDir(), "test-key", "")
 
 	req := httptest.NewRequest("GET", "/api/v1/output/nonexistent/video.mp4", nil)
 	w := httptest.NewRecorder()

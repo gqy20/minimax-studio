@@ -23,15 +23,16 @@ import (
 
 // Server HTTP API Server
 type Server struct {
-	engine    *gin.Engine
-	jobs      map[string]*schemas.Job
-	jobsMu    sync.RWMutex
-	outputDir string
-	client    *client.MiniMaxClient
+	engine      *gin.Engine
+	jobs        map[string]*schemas.Job
+	jobsMu      sync.RWMutex
+	outputDir   string
+	client      *client.MiniMaxClient
+	frontendDir string
 }
 
 // NewServer 创建新的 Server
-func NewServer(outputDir, apiKey string) *Server {
+func NewServer(outputDir, apiKey, frontendDir string) *Server {
 	if outputDir == "" {
 		outputDir = "./output"
 	}
@@ -43,14 +44,16 @@ func NewServer(outputDir, apiKey string) *Server {
 	engine.Use(corsMiddleware())
 
 	s := &Server{
-		engine:    engine,
-		jobs:      make(map[string]*schemas.Job),
-		outputDir: outputDir,
-		client:    client.NewClient(apiKey),
+		engine:      engine,
+		jobs:        make(map[string]*schemas.Job),
+		outputDir:   outputDir,
+		client:      client.NewClient(apiKey),
+		frontendDir: frontendDir,
 	}
 
 	s.loadJobsFromDisk()
 	s.setupRoutes()
+	RegisterFrontend(engine, frontendDir)
 	return s
 }
 
