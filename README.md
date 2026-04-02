@@ -76,6 +76,40 @@ export MINIMAX_API_KEY=your_api_key
 export MINIMAX_GROUP_ID=your_group_id
 ```
 
+## Frontend MVP
+
+仓库内已包含一个独立前端骨架，位于 `frontend/`，当前聚焦以下能力：
+
+- 提交 `make` 任务
+- 轮询 `jobs/:id`
+- 查看 quota
+- 预览最终视频、旁白、音乐和 `plan.json`
+
+### 启动方式
+
+先启动 Go server：
+
+```bash
+export MINIMAX_API_KEY=your_api_key
+./bin/ms server --port 8080
+```
+
+再启动前端：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+默认开发地址为 `http://localhost:3000`，并通过 Vite 代理转发到 `http://localhost:8080`。
+
+如果前端和后端不在同一地址，可设置：
+
+```bash
+export VITE_API_BASE_URL=http://localhost:8080
+```
+
 ## 构建
 
 ```bash

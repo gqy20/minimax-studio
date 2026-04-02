@@ -1,4 +1,4 @@
-.PHONY: build build-all clean test lint fmt deps run help
+.PHONY: build build-all clean test lint fmt deps run frontend-install frontend-build frontend-dev help
 
 # Go parameters
 GOCMD=go
@@ -67,6 +67,16 @@ deps:
 run: build
 	./$(BINARY_DIR)/$(BINARY_NAME) $(ARGS)
 
+# Frontend
+frontend-install:
+	cd frontend && npm install
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-dev:
+	cd frontend && npm run dev
+
 # Help
 help:
 	@echo "Available targets:"
@@ -78,4 +88,7 @@ help:
 	@echo "  fmt         - Format code"
 	@echo "  deps        - Download and tidy dependencies"
 	@echo "  run         - Build and run locally"
+	@echo "  frontend-install - Install frontend dependencies"
+	@echo "  frontend-build   - Build frontend"
+	@echo "  frontend-dev     - Run frontend dev server"
 	@echo "  help        - Show this help"
