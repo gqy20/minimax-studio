@@ -103,7 +103,32 @@ npm install
 npm run dev
 ```
 
-默认开发地址为 `http://localhost:3000`，并通过 Vite 代理转发到 `http://localhost:8080`。
+默认前端会监听 `0.0.0.0:3000`，所以除了本机 `http://localhost:3000`，也可以直接通过内网 IP 访问，例如：
+
+```bash
+http://192.168.1.23:3000
+```
+
+前提是：
+
+- Go server 已启动在 `8080`
+- 当前机器防火墙允许 `3000` 和 `8080`
+- 访问设备与开发机处于同一局域网
+
+前端开发代理默认转发到 `http://127.0.0.1:8080`。
+
+如果你要改端口或代理目标，可这样启动：
+
+```bash
+cd frontend
+FRONTEND_HOST=0.0.0.0 FRONTEND_PORT=3001 VITE_PROXY_TARGET=http://127.0.0.1:8081 npm run dev
+```
+
+也可以直接用：
+
+```bash
+make frontend-dev-lan
+```
 
 如果前端和后端不在同一地址，可设置：
 

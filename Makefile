@@ -77,6 +77,9 @@ frontend-build:
 frontend-dev:
 	cd frontend && npm run dev
 
+frontend-dev-lan:
+	cd frontend && FRONTEND_HOST=0.0.0.0 npm run dev
+
 # Help
 help:
 	@echo "Available targets:"
@@ -91,4 +94,5 @@ help:
 	@echo "  frontend-install - Install frontend dependencies"
 	@echo "  frontend-build   - Build frontend"
 	@echo "  frontend-dev     - Run frontend dev server"
+	@echo "  frontend-dev-lan - Run frontend dev server for LAN access"
 	@echo "  help        - Show this help"
