@@ -8,8 +8,10 @@ import (
 )
 
 var (
-	apiKey  string
-	groupID string
+	apiKey    string
+	groupID   string
+	Version   string
+	BuildTime string
 )
 
 // RootCmd 根命令
